@@ -143,7 +143,7 @@ export function inboxPulseTool(args: {
   limit?: number;
 }) {
   const { tenant, autoProvisioned } = resolveTenant(args.token);
-  recordCall(args.agentId, "inbox_pulse", args.focus);
+  recordCall(args.agentId, "triage_inbox", args.focus);
   const now = new Date();
   const limit = args.limit ?? 5;
   const triaged = args.messages.map((m) => triageMessage(asRaw(m), now));
@@ -199,7 +199,7 @@ export function rightNowTool(args: {
   limit?: number;
 }) {
   const { tenant, autoProvisioned } = resolveTenant(args.token);
-  recordCall(args.agentId, "right_now", args.focus);
+  recordCall(args.agentId, "list_right_now", args.focus);
   const lane = rankRightNow(args.messages.map(asRaw), args.limit ?? 5, new Date()).map((t) => ({
     messageId: t.messageId,
     from: t.from,
@@ -231,7 +231,7 @@ export function draftFollowupTool(args: {
   focus?: string;
 }) {
   const { tenant, autoProvisioned } = resolveTenant(args.token);
-  recordCall(args.agentId, "draft_followup", args.focus);
+  recordCall(args.agentId, "draft_reply", args.focus);
   const d = draftFollowup(asRaw(args), new Date());
   return withSafety({
     draft: d.draft === null ? null : taint(d.draft),
@@ -346,6 +346,75 @@ export function learningInsightsTool(args: { agentId?: string; includeBacklog?: 
   return withSafety(body);
 }
 
+// ─── why_surfaced ──────────────────────────────────────────────────────────
+export function whySurfacedTool(args: {
+  from: string;
+  body: string;
+  subject?: string;
+  to?: string;
+  id?: string;
+  knownSender?: boolean;
+  hasReply?: boolean;
+  receivedAt?: string;
+  token?: string;
+  agentId?: string;
+  focus?: string;
+}) {
+  const { tenant, autoProvisioned } = resolveTenant(args.token);
+  recordCall(args.agentId, "why_surfaced", args.focus);
+  const t = triageMessage(asRaw(args), new Date());
+  return withSafety({
+    messageId: t.messageId,
+    from: t.from,
+    subject: t.subject,
+    whySurfaced: taint(t.whySurfaced),
+    importance: taint(t.importance),
+    urgency: taint(t.urgency),
+    priority: taint(t.priority),
+    dimensions: taint(t.dimensions),
+    hardStop: taint(t.hardStop),
+    provenance: provenanceBlock([
+      "whySurfaced",
+      "importance",
+      "urgency",
+      "priority",
+      "dimensions",
+      "hardStop",
+    ]),
+    engineMode: ENGINE_MODE,
+    tenant: tenantBlock(tenant, autoProvisioned),
+  });
+}
+
+// ─── list_commitments ──────────────────────────────────────────────────────
+export function listCommitmentsTool(args: {
+  messages: z.infer<typeof messageItem>[];
+  token?: string;
+  agentId?: string;
+  focus?: string;
+}) {
+  const { tenant, autoProvisioned } = resolveTenant(args.token);
+  recordCall(args.agentId, "list_commitments", args.focus);
+  const now = new Date();
+  const openCommitments = args.messages
+    .map((m) => triageMessage(asRaw(m), now))
+    .filter((t) => t.commitment)
+    .map((t) => ({
+      messageId: t.messageId,
+      from: t.from,
+      subject: t.subject,
+      commitment: taint(t.commitment),
+    }));
+  return withSafety({
+    openCommitments,
+    count: openCommitments.length,
+    provenance: provenanceBlock(["openCommitments[].commitment"]),
+    engineMode: ENGINE_MODE,
+    tenant: tenantBlock(tenant, autoProvisioned),
+    note: "Open promises extracted from the batch. On the day each is due, RadMail drafts the follow-through for review — never auto-sent (money / first-contact stay human-only).",
+  });
+}
+
 // ─── Tool registry (name + description + zod input shape + handler) ─────────
 import { TOOL_DESCRIPTION_TAINT_SUFFIX } from "./lib/taint.js";
 
@@ -367,7 +436,7 @@ export const TOOL_DEFS: ToolDef[] = [
     handler: triageTool,
   },
   {
-    name: "inbox_pulse",
+    name: "triage_inbox",
     description:
       "ONE round-trip over a batch of messages: the Right Now lane + every open commitment + every hard-stop. The whole RadMail wedge in a single call. OMIT `token` to auto-provision." +
       TOOL_DESCRIPTION_TAINT_SUFFIX,
@@ -375,20 +444,36 @@ export const TOOL_DEFS: ToolDef[] = [
     handler: inboxPulseTool,
   },
   {
-    name: "right_now",
+    name: "list_right_now",
     description:
-      "The 'Right Now' lane: rank candidate messages by most-recent × most-important into a short can't-miss list, each with why-surfaced and hard-stop flags." +
+      "Return only the 'Right Now' lane — rank candidate messages by most-recent × most-important into a short can't-miss list, each with why-surfaced and hard-stop flags." +
       TOOL_DESCRIPTION_TAINT_SUFFIX,
     inputSchema: batchShape,
     handler: rightNowTool,
   },
   {
-    name: "draft_followup",
+    name: "why_surfaced",
+    description:
+      "Explain in plain English WHY a message was surfaced — the signals (sender, urgency words, commitment, hard-stop) behind its importance × urgency scores. Transparency, not a black box." +
+      TOOL_DESCRIPTION_TAINT_SUFFIX,
+    inputSchema: singleMessageShape,
+    handler: whySurfacedTool,
+  },
+  {
+    name: "draft_reply",
     description:
       "Draft the reply that discharges a commitment owed in a message. DRAFT ONLY — never auto-sent. REFUSES (human-only) for money / changed-banking / first-contact / decision / injection." +
       TOOL_DESCRIPTION_TAINT_SUFFIX,
     inputSchema: singleMessageShape,
     handler: draftFollowupTool,
+  },
+  {
+    name: "list_commitments",
+    description:
+      "List every open promise extracted from a batch — what you owe and to whom, with its due window. On the day each is due, RadMail drafts the follow-through for review (never auto-sent)." +
+      TOOL_DESCRIPTION_TAINT_SUFFIX,
+    inputSchema: batchShape,
+    handler: listCommitmentsTool,
   },
   {
     name: "search",

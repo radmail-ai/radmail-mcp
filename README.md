@@ -8,7 +8,7 @@ This is the Model Context Protocol (MCP) server, so any AI agent can use the inb
 
 ## Start in one call
 
-Call `triage` (or `inbox_pulse`) and **omit the token** — RadMail auto-provisions a free sandbox tenant and returns a working triage in one round-trip. Reuse the returned token.
+Call `triage_inbox` and **omit the token** — RadMail auto-provisions a free sandbox tenant and returns a working triage in one round-trip. Reuse the returned token. (On the zero-auth hosted sandbox, `triage_inbox` takes no args — it triages a built-in demo inbox so your very first call returns the full wedge.)
 
 > This server runs the **sandbox engine** (heuristic, in-memory, free, no credentials). It is real and runnable — not the production "99%" engine.
 
@@ -16,14 +16,16 @@ Call `triage` (or `inbox_pulse`) and **omit the token** — RadMail auto-provisi
 
 | Tool | What it does |
 |---|---|
-| `triage` | Score one message: two-axis importance × urgency, the `whySurfaced` reasons, and any hard-stop. |
-| `inbox_pulse` | One round-trip over a batch: the Right Now lane + every open commitment + every hard-stop. |
-| `right_now` | The can't-miss lane only. |
-| `draft_followup` | Draft a follow-up for an open commitment — **never** for a hard-stopped one. |
-| `search` | Retrieve across the triaged inbox. |
+| `triage_inbox` | One round-trip over a batch: the Right Now lane + every open commitment + every hard-stop. The whole wedge in one call. |
+| `list_right_now` | The can't-miss lane only — most-recent × most-important, each with why-surfaced + hard-stop flags. |
+| `why_surfaced` | Explain in plain English why a message surfaced — the signals behind its importance × urgency. Transparency, not a black box. |
+| `draft_reply` | Draft the reply that discharges a commitment — **never** for a hard-stopped one (money / banking / first-contact stay human-only). |
+| `list_commitments` | Every open promise extracted from the batch, with its due window. |
+| `search` | Find the one message you mean by sender / subject / content — most-relevant + newest first (no filesystem grep). |
+| `triage` | Score a single message (the per-message form of `triage_inbox`). |
 | `provision_sandbox` | Explicitly mint a free sandbox tenant. |
 | `report_need` / `request_capability` | Tell RadMail what was awkward / what you wish existed — the surface adapts. |
-| `radmail_learning_insights` | What RadMail has learned about this tenant's senders. |
+| `radmail_learning_insights` | What RadMail has learned about how you work. |
 
 ## The safety contract (un-bypassable by design)
 
