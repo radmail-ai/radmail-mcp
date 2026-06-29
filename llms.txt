@@ -1,0 +1,41 @@
+# RadMail MCP
+
+> An email operating system for agents — with a refusal you can trust. RadMail is the MCP server that lets any AI agent triage, search, and follow through on a mailbox, while the consequential actions are refused **in code, model-independent**. This package runs the **sandbox engine**: real and runnable, free, in-memory, no credentials. The production multi-tenant ("99%") engine is launch-gated.
+
+## What it is
+
+RadMail ranks mail on two axes (importance × urgency), surfaces a "Right Now" lane, explains *why* each message surfaced, tracks the commitments in a thread and drafts the follow-ups, and finds the one message you mean by sender/subject/content — without grepping a filesystem.
+
+## The lead: a machine-verifiable BEC hard-stop
+
+Money, changed-banking details, first-contact senders, decisions/sign-off, and prompt-injection are **human-only, forever** — a defense against business-email-compromise (BEC) fraud. This is enforced *by construction*: there is no MCP tool that auto-sends money, changes banking, or makes first contact, so no prompt can call one. The policy is published as a contract an agent can fetch and check before connecting: `https://radmail.ai/.well-known/agent-safety.json`.
+
+## Tools (9, read/triage/draft only)
+
+- `triage` — score one message on importance × urgency, explain why it surfaced, flag any hard-stop, extract any commitment.
+- `inbox_pulse` — one round-trip over a batch: the Right Now lane + every open commitment + every hard-stop.
+- `right_now` — the can't-miss lane only.
+- `draft_followup` — draft a reply that discharges a commitment; refuses (human-only) for money / changed-banking / first-contact / decision / injection.
+- `search` — find the one message by sender / subject / content, ranked most-relevant + newest first (no filesystem grep).
+- `provision_sandbox` — mint a free sandbox tenant (most tools auto-provision, so you rarely need this).
+- `report_need` / `request_capability` — tell RadMail what was awkward or what you wish existed; the surface adapts (call structure only, never email content).
+- `radmail_learning_insights` — what RadMail has learned about how you work.
+
+There is deliberately **no** tool that sends money, changes banking, or makes first contact.
+
+## Connect
+
+- Zero-auth hosted sandbox (streamable-http, no key): `https://radmail.ai/api/mcp/sandbox`
+- Local stdio: `npx -y radmail-mcp`
+- Start in one call: call `triage` (or `inbox_pulse`) and **omit** the token — a free sandbox tenant is auto-provisioned; reuse the returned token.
+
+## Compliance posture
+
+A tool, not a guarantee — BAA + shared-responsibility framing. RadMail is **not** HIPAA-certified, FedRAMP-authorized, or SOC 2-certified.
+
+## Links
+
+- Agent docs: https://radmail.ai/for-agents
+- Verifiable safety contract: https://radmail.ai/.well-known/agent-safety.json
+- MCP manifest: https://radmail.ai/.well-known/mcp.json
+- Homepage: https://radmail.ai
