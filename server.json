@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "websiteUrl": "https://radmail.ai/for-agents",
   "repository": {
-    "url": "https://github.com/radmail-ai/radmail-mcp",
+    "url": "https://github.com/dougsureel-tech/radmail-mcp",
     "source": "github"
   },
   "packages": [

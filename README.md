@@ -73,7 +73,7 @@ curl -s https://radmail.ai/.well-known/agent-safety.json
 
 > **Note:** the npm package publish is imminent — until it lands, use the **zero-auth hosted sandbox above** (no install, works today) or run from source below. The `npx` line goes live the moment `radmail-mcp` is on npm.
 
-Or from source: `git clone https://github.com/radmail-ai/radmail-mcp && npm i && npm run build && npm start` (stdio). Hosted deploy: Vercel Node serverless function (`api/mcp.ts`; `/` rewrites to the MCP handler).
+Or from source: `git clone https://github.com/dougsureel-tech/radmail-mcp && npm i && npm run build && npm start` (stdio). Hosted deploy: Vercel Node serverless function (`api/mcp.ts`; `/` rewrites to the MCP handler).
 
 ## Links
 
