@@ -112,21 +112,16 @@ test("detector: new-banking signal fires on changed-account language (verb-after
   );
 });
 
-// KNOWN BEC FALSE-NEGATIVE (surfaced for Doug, NOT weakened):
-// "our banking details have changed" SHOULD set hasNewBankingSignal=true, but
-// the ported firewall misses it. Root cause: BANKING_RE2's `\b(bank|...)\b`
-// alternative `bank` won't match "banking" (no word boundary between "bank"
-// and "ing"), and BANKING_RE's lead-in verb set doesn't help because the verb
-// trails the noun here. In production this exact wire only hard-stops via the
-// money/first-contact gates — a compromised *known* sender writing a pure
-// banking-change ask with no $ amount would slip the banking detector.
-// Fix belongs UPSTREAM in the main RadMail app (this file is ported byte-for-
-// byte and the firewall may only be tightened, never edited here): widen the
-// bank-noun alternatives to `bank\w*`. Kept as a `todo` so the correct
-// assertion stays on record without the test going red.
+// BEC FALSE-NEGATIVE CLOSED: "our banking details have changed" now sets
+// hasNewBankingSignal=true. Root cause was BANKING_RE2's bank-noun alternative
+// `bank` not matching "banking" (no word boundary between "bank" and "ing"), with
+// BANKING_RE's lead-in verb set not helping because the verb trails the noun here.
+// Fixed UPSTREAM (canonical firewall) by widening the bank-noun alternatives to
+// `bank\w*`; this byte-for-byte port carries the same tightening. A compromised
+// *known* sender writing a pure banking-change ask with no $ amount is now caught
+// by the banking detector directly, not only the money/first-contact gates.
 test(
-  "detector: new-banking signal SHOULD fire on 'banking details have changed' (noun-first word order)",
-  { todo: "BEC false-negative — BANKING_RE2 `bank` misses `banking`; fix upstream by widening to bank\\w*" },
+  "detector: new-banking signal fires on 'banking details have changed' (noun-first word order)",
   () => {
     assert.equal(
       detectSourceRiskSignals("subject", "our banking details have changed").hasNewBankingSignal,

@@ -78,9 +78,9 @@ function isHardStopType(t: CommitmentActionType): boolean {
 const MONEY_RE =
   /(\$\s?\d)|(\b\d{2,}\s?(usd|dollars|eur|gbp)\b)|\b(wire\s?transfer|wire|remit\w*|invoice|payment|deposit|ach|routing\s?number|swift|iban|amount\s?due|balance\s?due|past\s?due|payable|payout)\b/i;
 const BANKING_RE =
-  /\b(new|updated?|chang(?:e|ed|ing)|revis\w+|different|switch(?:ed)?)\b[^.!?\n]{0,50}\b(bank|account|remit\w*|wire|routing|payment\s+(?:details|info|information|instructions))\b/i;
+  /\b(new|updated?|chang(?:e|ed|ing)|revis\w+|different|switch(?:ed)?)\b[^.!?\n]{0,50}\b(bank\w*|account|remit\w*|wire|routing|payment\s+(?:details|info|information|instructions))\b/i;
 const BANKING_RE2 =
-  /\b(bank|account|routing|remit\w*|wire|payment\s+(?:details|info|information|instructions))\b[^.!?\n]{0,50}\b(chang(?:e|ed|ing)|updated?|new|revis\w+|different)\b/i;
+  /\b(bank\w*|account|routing|remit\w*|wire|payment\s+(?:details|info|information|instructions))\b[^.!?\n]{0,50}\b(chang(?:e|ed|ing)|updated?|new|revis\w+|different)\b/i;
 const DECISION_RE =
   /\b(approv\w+|sign[\s-]?off|signoff|authoriz\w+|go[\s-]?ahead|green[\s-]?light)\b|\b(please\s+)?confirm\b[^.!?\n]{0,30}\b(order|po|purchase|wire|payment|deal|contract|invoice)\b/i;
 // Prompt-injection in inbound mail that could steer an autonomous reply. Expanded
