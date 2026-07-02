@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.vercel
+*.log
+.DS_Store
+.env
+.env.*
+test
+scripts
