@@ -1,8 +1,9 @@
 // Connected-mode client — the READ-ONLY bridge to the user's REAL RadMail inbox
 // (the app.radmail.ai v1 REST API, Bearer `tmk_...` API key).
 //
-// Presence of RADMAIL_API_KEY switches `search` (when `messages` is omitted) and
-// `read_email` from the in-memory sandbox to the live inbox. Deliberately tiny:
+// Presence of RADMAIL_API_KEY switches `search` / `list_right_now` /
+// `list_commitments` (when `messages` is omitted) and `read_email` from the
+// in-memory sandbox to the live inbox. Deliberately tiny:
 //
 //   · global fetch, 10s timeout, at most ONE retry (plain network errors only —
 //     never on a timeout, never on an HTTP status)
@@ -222,4 +223,69 @@ export interface RemoteEmailDetail extends RemoteSearchHit {
 export async function getEmail(id: string, cfg: ConnectedConfig): Promise<RemoteEmailDetail | null> {
   const body = await apiGet(`/api/v1/emails/${encodeURIComponent(id)}`, {}, cfg);
   return (body.data as RemoteEmailDetail | undefined) ?? null;
+}
+
+/** Shared pagination params for the list endpoints. */
+export interface RemotePageParams {
+  limit?: number;
+  offset?: number;
+}
+
+/** One item from GET /api/v1/right-now — the user's REAL "can't-miss" lane.
+ *  Fields are UNTRUSTED real-inbox content until tainted at the tool boundary. */
+export interface RemoteRightNowItem {
+  id?: string;
+  receivedAt?: string;
+  from?: string;
+  fromName?: string | null;
+  subject?: string | null;
+  classification?: string | null;
+  classificationSource?: string | null;
+  isSpam?: boolean;
+  needsOwnerEyes?: boolean;
+  counterparty?: string | null;
+  threadId?: string | null;
+  importance?: number;
+  urgency?: number;
+  band?: string;
+  reasons?: string[];
+}
+
+/** GET /api/v1/right-now — the ranked Right Now lane of the user's real inbox. */
+export async function getRightNow(
+  p: RemotePageParams,
+  cfg: ConnectedConfig,
+): Promise<{ items: RemoteRightNowItem[]; pagination: RemotePagination | null }> {
+  const body = await apiGet("/api/v1/right-now", { limit: p.limit, offset: p.offset }, cfg);
+  return {
+    items: Array.isArray(body.data) ? (body.data as RemoteRightNowItem[]) : [],
+    pagination: (body.pagination as RemotePagination | undefined) ?? null,
+  };
+}
+
+/** One commitment from GET /api/v1/commitments. party / action / duePhrase are
+ *  UNTRUSTED real-mail-derived text until tainted at the tool boundary. */
+export interface RemoteCommitment {
+  id?: string;
+  direction?: "owed_by_us" | "owed_to_us" | string;
+  party?: string | null;
+  action?: string | null;
+  actionType?: string | null;
+  dueDate?: string | null;
+  duePhrase?: string | null;
+  state?: string | null;
+  confidence?: number | null;
+  counterpartyEmail?: string | null;
+}
+
+/** GET /api/v1/commitments — the user's real open promises (both directions). */
+export async function getCommitments(
+  p: RemotePageParams,
+  cfg: ConnectedConfig,
+): Promise<{ items: RemoteCommitment[]; pagination: RemotePagination | null }> {
+  const body = await apiGet("/api/v1/commitments", { limit: p.limit, offset: p.offset }, cfg);
+  return {
+    items: Array.isArray(body.data) ? (body.data as RemoteCommitment[]) : [],
+    pagination: (body.pagination as RemotePagination | undefined) ?? null,
+  };
 }

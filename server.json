@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "ai.radmail/radmail-mcp",
-  "description": "Email OS for agents: triage, search, and a verifiable BEC hard-stop. Zero-auth sandbox + read-only connected mode (RADMAIL_API_KEY searches your real inbox).",
-  "version": "0.2.0",
+  "description": "Email OS for agents: triage, search, and a verifiable BEC hard-stop. Zero-auth sandbox + read-only connected mode (RADMAIL_API_KEY: search your real inbox, read full emails, see your real Right Now lane + open commitments).",
+  "version": "0.3.0",
   "websiteUrl": "https://radmail.ai/for-agents",
   "repository": {
     "url": "https://github.com/dougsureel-tech/radmail-mcp",
@@ -13,7 +13,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "radmail-mcp",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "transport": { "type": "stdio" }
     }
   ],

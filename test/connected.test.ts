@@ -11,7 +11,7 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
-import { searchTool, readEmailTool } from "../src/tools.js";
+import { searchTool, readEmailTool, rightNowTool, listCommitmentsTool } from "../src/tools.js";
 import {
   getConnectedConfig,
   __setFetchForTests,
@@ -299,4 +299,281 @@ test("read_email without a key returns the setup pointer (not an error)", async 
   assert.equal(r.connected, false);
   assert.equal("error" in r, false);
   assert.match(JSON.stringify(r), /app\.radmail\.ai\/settings\/api-keys/);
+});
+
+// ─── v0.3.0: connected list_right_now ────────────────────────────────────────
+
+const RIGHT_NOW_ITEM = {
+  id: "em_rn1",
+  receivedAt: "2026-07-01T15:00:00.000Z",
+  from: "hi@seattlecannabis.co",
+  fromName: "Austin Aronson",
+  subject: "Dutchie cutover question",
+  classification: "operations",
+  classificationSource: "llm",
+  isSpam: false,
+  needsOwnerEyes: true,
+  counterparty: "Seattle Cannabis Co.",
+  threadId: "th_42",
+  importance: 88,
+  urgency: 74,
+  band: "right_now",
+  reasons: ["known counterparty", "open question addressed to you", "aging 2 days"],
+};
+
+const RIGHT_NOW_OK = {
+  ok: true,
+  data: [RIGHT_NOW_ITEM],
+  pagination: { limit: 5, offset: 0, total: 3, hasMore: false },
+};
+
+test("connected list_right_now: maps v1 params + Bearer, taints content fields, no fabricated hardStop", async () => {
+  process.env.RADMAIL_API_KEY = KEY;
+  let seenUrl = "";
+  let seenAuth = "";
+  __setFetchForTests(async (url, init) => {
+    seenUrl = String(url);
+    seenAuth = (init.headers as Record<string, string>).Authorization;
+    return jsonResponse(RIGHT_NOW_OK);
+  });
+
+  const r = (await rightNowTool({ limit: 5, offset: 0 })) as Record<string, any>;
+
+  // Request mapping
+  const u = new URL(seenUrl);
+  assert.equal(u.origin + u.pathname, `${DEFAULT_API_URL}/api/v1/right-now`);
+  assert.equal(u.searchParams.get("limit"), "5");
+  assert.equal(seenAuth, `Bearer ${KEY}`);
+
+  // Response mapping + taint discipline
+  assertSafety(r);
+  assert.equal(r.engineMode, "connected");
+  assert.equal(r.readOnly, true);
+  assert.equal(r.lane.length, 1);
+  const item = r.lane[0];
+  assert.equal(item.messageId, "em_rn1");
+  assert.equal(item.from, "hi@seattlecannabis.co");
+  assert.equal(item.receivedAt, RIGHT_NOW_ITEM.receivedAt);
+  assert.equal(item.threadId, "th_42");
+  assert.equal(item.classificationSource, "llm");
+  for (const f of ["fromName", "subject", "importance", "urgency", "band", "whySurfaced", "reasons", "classification", "isSpam", "needsOwnerEyes", "counterparty"]) {
+    assert.ok(isTainted(item[f]), `${f} must be tainted (real-inbox content)`);
+  }
+  assert.equal(item.band.value, "right_now");
+  assert.equal(item.importance.value, 88);
+  assert.equal(item.urgency.value, 74);
+  assert.deepEqual(item.reasons.value, RIGHT_NOW_ITEM.reasons);
+  assert.equal(item.whySurfaced.value, "known counterparty; open question addressed to you; aging 2 days");
+
+  // Honesty: the API returned no hard-stop determination, so none may be fabricated.
+  assert.equal("hardStop" in item, false, "must not fabricate a hardStop the API didn't return");
+
+  assert.deepEqual(r.pagination, RIGHT_NOW_OK.pagination);
+  assert.ok(r.provenance.taintedFields.includes("lane[].band"));
+  assert.ok(r.provenance.taintedFields.includes("lane[].reasons"));
+  assert.ok(!JSON.stringify(r).includes(KEY), "API key must never be echoed");
+});
+
+test("connected list_right_now: 401 fails closed — typed auth error, no lane fabricated", async () => {
+  process.env.RADMAIL_API_KEY = KEY;
+  __setFetchForTests(async () => jsonResponse({ ok: false, error: "invalid api key" }, 401));
+  const r = (await rightNowTool({})) as Record<string, any>;
+  assertSafety(r);
+  assert.equal(r.ok, false);
+  assert.equal(r.error.kind, "auth");
+  assert.equal(r.error.status, 401);
+  assert.equal("lane" in r, false, "must not fabricate a lane");
+  assert.ok(!JSON.stringify(r).includes(KEY));
+});
+
+test("list_right_now sandbox path is byte-for-byte identical with and without RADMAIL_API_KEY set", () => {
+  const messages = [
+    {
+      from: "sarah@knownclient.com",
+      subject: "Re: Q3 deck",
+      body: "Can you get me the revised numbers by Thursday?",
+      knownSender: true,
+      receivedAt: "2026-06-30T17:05:00.000Z",
+    },
+  ];
+  const first = rightNowTool({ messages }) as Record<string, any>;
+  const token = first.tenant.token as string;
+
+  const noKey = rightNowTool({ messages, token }) as Record<string, any>;
+  process.env.RADMAIL_API_KEY = KEY;
+  __setFetchForTests(async () => {
+    throw new Error("sandbox path must never touch the network");
+  });
+  const withKey = rightNowTool({ messages, token }) as Record<string, any>;
+
+  assert.equal(JSON.stringify(withKey), JSON.stringify(noKey));
+  assert.equal(withKey.engineMode, "sandbox");
+  assert.ok(isTainted(withKey.lane[0].whySurfaced));
+  assert.ok("hardStop" in withKey.lane[0], "sandbox lane keeps its hardStop flag");
+});
+
+test("list_right_now without messages and without a key returns the two-options pointer", async () => {
+  const r = (await rightNowTool({})) as Record<string, any>;
+  assertSafety(r);
+  assert.equal(r.connected, false);
+  assert.equal("error" in r, false, "this is guidance, not an error");
+  assert.equal("lane" in r, false, "must not fabricate a lane");
+  const text = JSON.stringify(r);
+  assert.match(text, /RADMAIL_API_KEY/);
+  assert.match(text, /app\.radmail\.ai\/settings\/api-keys/);
+  assert.match(text, /list_right_now/);
+});
+
+// ─── v0.3.0: connected list_commitments ──────────────────────────────────────
+
+// Verbatim prod shape (2026-07-02) — duePhrase null, state "escalated".
+const COMMITMENT_PROD = {
+  id: "cmt_1",
+  direction: "owed_by_us",
+  party: "Doug / Seattle Cannabis Co.",
+  action: "Confirm in Dutchie whether the loyalty sync is enabled",
+  actionType: "answer_question",
+  dueDate: "2026-06-30",
+  duePhrase: null,
+  state: "escalated",
+  confidence: 0.92,
+  counterpartyEmail: "hi@seattlecannabis.co",
+};
+
+const COMMITMENT_WITH_PHRASE = {
+  id: "cmt_2",
+  direction: "owed_to_us",
+  party: "Metrc support",
+  action: "Send the CO sandbox credentials",
+  actionType: "send_item",
+  dueDate: null,
+  duePhrase: "by end of week",
+  state: "open",
+  confidence: 0.71,
+  counterpartyEmail: null,
+};
+
+const COMMITMENTS_OK = {
+  ok: true,
+  data: [COMMITMENT_PROD, COMMITMENT_WITH_PHRASE],
+  pagination: { limit: 2, offset: 0, total: 12, hasMore: true },
+};
+
+test("connected list_commitments: maps v1 params + fields, taints party/action/duePhrase", async () => {
+  process.env.RADMAIL_API_KEY = KEY;
+  let seenUrl = "";
+  let seenAuth = "";
+  __setFetchForTests(async (url, init) => {
+    seenUrl = String(url);
+    seenAuth = (init.headers as Record<string, string>).Authorization;
+    return jsonResponse(COMMITMENTS_OK);
+  });
+
+  const r = (await listCommitmentsTool({ limit: 2, offset: 0 })) as Record<string, any>;
+
+  // Request mapping
+  const u = new URL(seenUrl);
+  assert.equal(u.origin + u.pathname, `${DEFAULT_API_URL}/api/v1/commitments`);
+  assert.equal(u.searchParams.get("limit"), "2");
+  assert.equal(seenAuth, `Bearer ${KEY}`);
+
+  // Response mapping + taint discipline
+  assertSafety(r);
+  assert.equal(r.engineMode, "connected");
+  assert.equal(r.readOnly, true);
+  assert.equal(r.count, 2);
+  assert.equal(r.openCommitments.length, 2);
+
+  const c1 = r.openCommitments[0];
+  assert.equal(c1.commitmentId, "cmt_1");
+  assert.equal(c1.direction, "owed_by_us");
+  assert.equal(c1.actionType, "answer_question");
+  assert.equal(c1.dueDate, "2026-06-30");
+  assert.equal(c1.state, "escalated");
+  assert.equal(c1.confidence, 0.92);
+  assert.equal(c1.counterpartyEmail, "hi@seattlecannabis.co");
+  assert.ok(isTainted(c1.party), "party must be tainted (real-mail-derived text)");
+  assert.ok(isTainted(c1.action), "action must be tainted (real-mail-derived text)");
+  assert.equal(c1.party.value, COMMITMENT_PROD.party);
+  assert.equal(c1.action.value, COMMITMENT_PROD.action);
+  assert.equal(c1.duePhrase, null, "null duePhrase passes through as null, not a tainted null");
+
+  const c2 = r.openCommitments[1];
+  assert.equal(c2.direction, "owed_to_us");
+  assert.equal(c2.dueDate, null);
+  assert.equal(c2.counterpartyEmail, null);
+  assert.ok(isTainted(c2.duePhrase), "non-null duePhrase must be tainted");
+  assert.equal(c2.duePhrase.value, "by end of week");
+
+  assert.deepEqual(r.pagination, COMMITMENTS_OK.pagination);
+  for (const f of ["openCommitments[].party", "openCommitments[].action", "openCommitments[].duePhrase"]) {
+    assert.ok(r.provenance.taintedFields.includes(f), `provenance must list ${f}`);
+  }
+  assert.ok(!JSON.stringify(r).includes(KEY), "API key must never be echoed");
+});
+
+test("connected list_commitments: 403 fails closed as an entitlement error", async () => {
+  process.env.RADMAIL_API_KEY = KEY;
+  __setFetchForTests(async () => jsonResponse({ ok: false, error: "plan not entitled" }, 403));
+  const r = (await listCommitmentsTool({})) as Record<string, any>;
+  assertSafety(r);
+  assert.equal(r.ok, false);
+  assert.equal(r.error.kind, "entitlement");
+  assert.equal(r.error.status, 403);
+  assert.equal("openCommitments" in r, false, "must not fabricate commitments");
+  assert.ok(!JSON.stringify(r).includes(KEY));
+});
+
+test("connected list_commitments: timeout fails closed (no retry on abort)", async () => {
+  process.env.RADMAIL_API_KEY = KEY;
+  let calls = 0;
+  __setFetchForTests(async () => {
+    calls++;
+    const e = new Error("This operation was aborted");
+    e.name = "AbortError";
+    throw e;
+  });
+  const r = (await listCommitmentsTool({})) as Record<string, any>;
+  assert.equal(r.ok, false);
+  assert.equal(r.error.kind, "timeout");
+  assert.equal(calls, 1, "a timeout must not be retried");
+  assert.equal("openCommitments" in r, false);
+});
+
+test("list_commitments sandbox path is byte-for-byte identical with and without RADMAIL_API_KEY set", () => {
+  const messages = [
+    {
+      from: "sarah@knownclient.com",
+      subject: "Re: Q3 deck",
+      body: "Can you get me the revised numbers by Thursday?",
+      knownSender: true,
+      receivedAt: "2026-06-30T17:05:00.000Z",
+    },
+  ];
+  const first = listCommitmentsTool({ messages }) as Record<string, any>;
+  const token = first.tenant.token as string;
+
+  const noKey = listCommitmentsTool({ messages, token }) as Record<string, any>;
+  process.env.RADMAIL_API_KEY = KEY;
+  __setFetchForTests(async () => {
+    throw new Error("sandbox path must never touch the network");
+  });
+  const withKey = listCommitmentsTool({ messages, token }) as Record<string, any>;
+
+  assert.equal(JSON.stringify(withKey), JSON.stringify(noKey));
+  assert.equal(withKey.engineMode, "sandbox");
+  assert.equal(withKey.count, 1);
+  assert.ok(isTainted(withKey.openCommitments[0].commitment));
+});
+
+test("list_commitments without messages and without a key returns the two-options pointer", async () => {
+  const r = (await listCommitmentsTool({})) as Record<string, any>;
+  assertSafety(r);
+  assert.equal(r.connected, false);
+  assert.equal("error" in r, false, "this is guidance, not an error");
+  assert.equal("openCommitments" in r, false, "must not fabricate commitments");
+  const text = JSON.stringify(r);
+  assert.match(text, /RADMAIL_API_KEY/);
+  assert.match(text, /app\.radmail\.ai\/settings\/api-keys/);
+  assert.match(text, /list_commitments/);
 });

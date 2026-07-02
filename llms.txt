@@ -13,10 +13,10 @@ Money, changed-banking details, first-contact senders, decisions/sign-off, and p
 ## Tools (read/triage/draft only)
 
 - `triage_inbox` — one round-trip over a batch: the Right Now lane + every open commitment + every hard-stop. The whole wedge in one call.
-- `list_right_now` — the can't-miss lane only: most-recent × most-important, each with why-surfaced + hard-stop flags.
+- `list_right_now` — the can't-miss lane only: most-recent × most-important, each with why-surfaced. Two modes: pass a `messages` batch (sandbox, with hard-stop flags) or omit it with `RADMAIL_API_KEY` set for the user's REAL Right Now lane (connected, read-only; band + importance + urgency + reasons from the live engine).
 - `why_surfaced` — explain in plain English why a message was surfaced (the signals behind its importance × urgency). Transparency, not a black box.
 - `draft_reply` — draft a reply that discharges a commitment; refuses (human-only) for money / changed-banking / first-contact / decision / injection.
-- `list_commitments` — every open promise extracted from the batch, with its due window; RadMail drafts the follow-through on the due date (never auto-sent).
+- `list_commitments` — open promises with the due window; RadMail drafts the follow-through on the due date (never auto-sent). Two modes: pass a `messages` batch (sandbox extraction) or omit it with `RADMAIL_API_KEY` set for the user's REAL tracked commitments (connected, read-only; direction / party / action / due / state / confidence).
 - `search` — find the one message you mean by sender / subject / content (no filesystem grep), most-relevant + newest first. Two modes: pass a `messages` batch (sandbox) or omit it with `RADMAIL_API_KEY` set to search the user's REAL inbox (connected, read-only; optional `from` / `after` / `before` filters).
 - `read_email` — connected mode only: fetch one full email (headers + `textBody`) from the real inbox by id. Read-only; body content arrives taint-tagged.
 - `provision_sandbox` — mint a free sandbox tenant (most tools auto-provision, so you rarely need this).
@@ -25,9 +25,9 @@ Money, changed-banking details, first-contact senders, decisions/sign-off, and p
 
 There is deliberately **no** tool that sends money, changes banking, or makes first contact.
 
-## Connected mode — search your real inbox (read-only)
+## Connected mode — your real inbox (read-only)
 
-Set the `RADMAIL_API_KEY` environment variable on the local (stdio) server — create a key in about a minute at `https://app.radmail.ai/settings/api-keys` — and `search` (with `messages` omitted) finds any email the user has ever received, while `read_email` fetches the full message. `RADMAIL_API_URL` optionally overrides the API host (default `https://app.radmail.ai`). Connected mode is READ-ONLY by construction: it never sends, drafts against, or mutates real mail; every content-derived field arrives tagged `provenance:"untrusted-email-body"`; and it fails closed (invalid key / plan / timeout ⇒ an honest error, never fabricated results). The zero-auth hosted sandbox stays key-less and does not expose `read_email`.
+Set the `RADMAIL_API_KEY` environment variable on the local (stdio) server — create a key in about a minute at `https://app.radmail.ai/settings/api-keys` — and four tools go live against the user's REAL RadMail inbox: `search` (with `messages` omitted) finds any email the user has ever received, `read_email` fetches the full message, `list_right_now` (with `messages` omitted) returns the real can't-miss lane, and `list_commitments` (with `messages` omitted) lists the real open promises. Search it, read it, know what matters now, know what's owed. `RADMAIL_API_URL` optionally overrides the API host (default `https://app.radmail.ai`). Connected mode is READ-ONLY by construction: it never sends, drafts against, or mutates real mail; every content-derived field arrives tagged `provenance:"untrusted-email-body"`; and it fails closed (invalid key / plan / timeout ⇒ an honest error, never fabricated results). The zero-auth hosted sandbox stays key-less and does not expose `read_email`.
 
 ## Connect
 

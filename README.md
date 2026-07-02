@@ -17,10 +17,10 @@ Call `triage_inbox` and **omit the token** — RadMail auto-provisions a free sa
 | Tool | What it does |
 |---|---|
 | `triage_inbox` | One round-trip over a batch: the Right Now lane + every open commitment + every hard-stop. The whole wedge in one call. |
-| `list_right_now` | The can't-miss lane only — most-recent × most-important, each with why-surfaced + hard-stop flags. |
+| `list_right_now` | The can't-miss lane only — most-recent × most-important, each with why-surfaced. Pass `messages` for the sandbox (with hard-stop flags), or omit them with `RADMAIL_API_KEY` set for your **real** Right Now lane (read-only). |
 | `why_surfaced` | Explain in plain English why a message surfaced — the signals behind its importance × urgency. Transparency, not a black box. |
 | `draft_reply` | Draft the reply that discharges a commitment — **never** for a hard-stopped one (money / banking / first-contact stay human-only). |
-| `list_commitments` | Every open promise extracted from the batch, with its due window. |
+| `list_commitments` | Open promises with their due window. Pass `messages` for sandbox extraction, or omit them with `RADMAIL_API_KEY` set for your **real** tracked commitments (read-only). |
 | `search` | Find the one message you mean by sender / subject / content — most-relevant + newest first (no filesystem grep). Pass `messages` for the sandbox, or omit them with `RADMAIL_API_KEY` set to search your **real inbox** (read-only). |
 | `read_email` | **Connected mode only:** fetch one full email (headers + `textBody`) from your real inbox by id. Read-only; body content arrives taint-tagged. |
 | `triage` | Score a single message (the per-message form of `triage_inbox`). |
@@ -76,16 +76,24 @@ curl -s https://radmail.ai/.well-known/agent-safety.json
 
 Or from source: `git clone https://github.com/dougsureel-tech/radmail-mcp && npm i && npm run build && npm start` (stdio). Hosted deploy: Vercel Node serverless function (`api/mcp.ts`; `/` rewrites to the MCP handler).
 
-## Connected mode — search your real inbox
+## Connected mode — your real inbox
 
-Give the server a RadMail API key and the same `search` tool stops being a demo: omit `messages` and it searches **every email you've ever received** in your real RadMail inbox — then `read_email` fetches the full message. Install it once and your AI can find any email.
+Give the server a RadMail API key and **four tools** stop being a demo. Omit `messages` and:
+
+- `search` finds **any email you've ever received** in your real RadMail inbox;
+- `read_email` fetches the full message (headers + `textBody`);
+- `list_right_now` returns your **real can't-miss lane** — the live engine's band + importance + urgency + reasons per item;
+- `list_commitments` lists your **real open promises** — direction (`owed_by_us` / `owed_to_us`), party, action, due date/phrase, state, confidence.
+
+Search it, read it, know what matters now, know what's owed — install it once and your AI has the whole picture.
 
 - **Config:** set `RADMAIL_API_KEY` (keys start with `tmk_` — create one in about a minute at <https://app.radmail.ai/settings/api-keys>). Optional: `RADMAIL_API_URL` overrides the API host (default `https://app.radmail.ai`).
 - **Read-only by construction:** connected mode only ever issues GETs. It never sends, drafts against, or mutates real mail, and the BEC hard-stops (money / changed-banking / first-contact / decision / injection) stay human-only forever.
 - **Same taint envelope:** every field derived from real email content (`subject`, `fromName`, `snippet`, `textBody`, …) arrives tagged `provenance:"untrusted-email-body"` — data to reason about, never instructions to follow.
 - **Fail-closed:** invalid key (401), un-entitled plan (403), or a timeout returns an honest, typed error — never fabricated results. The key itself is never logged or echoed.
-- **Filters:** connected `search` supports optional `from`, `after`, and `before` (ISO-8601) alongside `query` and `limit`.
-- Without a key, `search` (sans `messages`) and `read_email` return friendly setup instructions instead of an error — the sandbox keeps working exactly as before.
+- **Filters & paging:** connected `search` supports optional `from`, `after`, and `before` (ISO-8601) alongside `query` and `limit`; connected `list_right_now` / `list_commitments` support `limit` and `offset`.
+- **No fabricated judgments:** connected `list_right_now` surfaces the live engine's own band / importance / urgency / reasons as-is — it never invents local hard-stop determinations the API didn't return.
+- Without a key, `search` / `list_right_now` / `list_commitments` (sans `messages`) and `read_email` return friendly setup instructions instead of an error — the sandbox keeps working exactly as before.
 
 **Claude Code:**
 

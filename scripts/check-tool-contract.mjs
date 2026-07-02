@@ -15,6 +15,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HOSTED = "https://radmail.ai/api/mcp/sandbox";
 
 // The canonical surface every advertised path must expose (matches the live hosted sandbox).
+// NOTE (v0.3.0): `search`, `list_right_now`, and `list_commitments` are DUAL-MODE — they exist
+// key-less in the sandbox (pass `messages`) so they stay LIVE-canonical here, and additionally
+// go connected (real inbox, read-only) when RADMAIL_API_KEY is set on the package server.
 const CANONICAL = [
   "triage_inbox",
   "list_right_now",
@@ -27,7 +30,8 @@ const CANONICAL = [
 // Canonical on the PACKAGE surface only. Connected mode (RADMAIL_API_KEY) rides the
 // local npm/stdio package; the zero-auth hosted sandbox stays key-less by design, so
 // these must be advertised (mcp.json + llms.txt) and registered by the package, but
-// are NOT required of the live hosted sandbox.
+// are NOT required of the live hosted sandbox. `read_email` is the only connected-ONLY
+// tool (it has no sandbox mode) — the other connected tools live in CANONICAL above.
 const PACKAGE_CANONICAL = ["read_email"];
 
 const fail = [];
