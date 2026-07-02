@@ -32,7 +32,7 @@ Set the `RADMAIL_API_KEY` environment variable on the local (stdio) server — c
 ## Connect
 
 - Zero-auth hosted sandbox (streamable-http, no key): `https://radmail.ai/api/mcp/sandbox`
-- Local stdio: `npx -y radmail-mcp` (activates the moment the npm publish lands; running from source works today)
+- Local stdio: `npx -y radmail-mcp` (live on npm)
 - Connected mode: `claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp`
 - Start in one call: call `triage_inbox` and **omit** the token — a free sandbox tenant is auto-provisioned; reuse the returned token. (On the hosted sandbox, `triage_inbox` needs no args — it triages a built-in demo inbox.)
 

@@ -8,7 +8,7 @@ import { SAFETY_BLOCK } from "./lib/taint.js";
 
 export const SERVER_INFO = {
   name: "radmail-mcp",
-  version: "0.3.0",
+  version: "0.3.2",
 } as const;
 
 export const SERVER_INSTRUCTIONS =
