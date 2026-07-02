@@ -2,7 +2,7 @@
   "name": "radmail-mcp",
   "version": "0.1.0",
   "private": false,
-  "description": "RadMail MCP server — email operating system for agents: two-axis triage (importance x urgency), a 'Right Now' lane, commitment follow-through, reviewable drafts, and a machine-verifiable BEC hard-stop (money / changed-banking / first-contact / decision / injection = human-only forever). Zero-auth in-memory sandbox.",
+  "description": "RadMail MCP server \u2014 email operating system for agents: two-axis triage (importance x urgency), a 'Right Now' lane, commitment follow-through, reviewable drafts, and a machine-verifiable BEC hard-stop (money / changed-banking / first-contact / decision / injection = human-only forever). Zero-auth in-memory sandbox.",
   "license": "MIT",
   "author": "RadMail (https://radmail.ai)",
   "type": "module",
@@ -44,5 +44,10 @@
     "@types/node": "^22.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.6.0"
+  },
+  "mcpName": "ai.radmail/radmail-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dougsureel-tech/radmail-mcp"
   }
 }
