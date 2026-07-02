@@ -6,5 +6,11 @@
       "maxDuration": 30
     }
   },
-  "rewrites": [{ "source": "/", "destination": "/api/mcp" }]
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/api/mcp"
+    }
+  ],
+  "ignoreCommand": "bash -c 'git diff --quiet HEAD^ HEAD -- . \":(exclude)*.md\"'"
 }

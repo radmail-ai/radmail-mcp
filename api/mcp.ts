@@ -12,6 +12,7 @@
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createServer } from "../src/server.js";
+import { checkRateLimit, clientIp } from "../src/lib/rate-limit.js";
 
 export async function GET(): Promise<Response> {
   // Health / discovery ping — not the MCP channel itself (which is POST).
@@ -28,6 +29,28 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(req: Request): Promise<Response> {
+  // Zero-auth endpoint — 60 req/min per IP (matches the radmail-web sandbox
+  // MCP's throttle; a normal agent conversation is a few calls/min, so this
+  // only bites loops). 429 is a proper JSON-RPC-shaped error so MCP clients
+  // fail loud rather than hanging.
+  const rl = checkRateLimit(`mcp:${clientIp(req)}`, 60, 60_000);
+  if (!rl.ok) {
+    return new Response(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: `Rate limited — retry in ${rl.retryAfterSeconds}s (60 requests/min per IP on the zero-auth sandbox).` },
+        id: null,
+      }),
+      {
+        status: 429,
+        headers: {
+          "content-type": "application/json",
+          "retry-after": String(rl.retryAfterSeconds),
+        },
+      },
+    );
+  }
+
   const server = createServer();
   const transport = new WebStandardStreamableHTTPServerTransport({
     // Stateless: no session id generator. JSON responses (no long-lived SSE) suit
