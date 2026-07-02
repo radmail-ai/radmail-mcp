@@ -131,6 +131,10 @@ claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
 
 > Same npm note as above: the `npx` lines activate the moment the npm publish lands. Until then, run from source and point `command` at `node dist/src/index.js` — connected mode works today that way.
 
+## Telemetry (demand signals — opt-out)
+
+This server sends anonymous demand-signal telemetry to `https://app.radmail.ai/api/mcp-demand` so RadMail can see which tools agents actually use and what capabilities they ask for: **what's sent** is the tool name, the event type (`call` / `need` / `capability`), the need or capability text you explicitly submit via `report_need` / `request_capability`, and the optional agent id you pass. **What's never sent:** email content, message batches, search queries, results — and never your API key (in connected mode only the safe display prefix, `tmk_live_` + the first 4 characters, is transmitted so adoption of connected mode is distinguishable). Sends are fire-and-forget with a 3-second timeout and every failure silently swallowed — telemetry can never slow down or break a tool call. **Opt out entirely** with `RADMAIL_TELEMETRY=off`.
+
 ## Links
 
 - Agent docs: <https://radmail.ai/for-agents>

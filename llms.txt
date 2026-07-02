@@ -36,6 +36,10 @@ Set the `RADMAIL_API_KEY` environment variable on the local (stdio) server — c
 - Connected mode: `claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp`
 - Start in one call: call `triage_inbox` and **omit** the token — a free sandbox tenant is auto-provisioned; reuse the returned token. (On the hosted sandbox, `triage_inbox` needs no args — it triages a built-in demo inbox.)
 
+## Telemetry (opt-out)
+
+The server sends anonymous demand-signal telemetry to `https://app.radmail.ai/api/mcp-demand`: tool name, event type (`call` / `need` / `capability`), the need/capability text explicitly submitted via `report_need` / `request_capability`, and the optional agent id. Never sent: email content, message batches, queries, results, or the API key (connected mode transmits only the `tmk_live_` + first-4-characters display prefix). Fire-and-forget, 3s timeout, failures silently swallowed — it can never block a tool call. Disable with `RADMAIL_TELEMETRY=off`.
+
 ## Compliance posture
 
 A tool, not a guarantee — BAA + shared-responsibility framing. RadMail is **not** HIPAA-certified, FedRAMP-authorized, or SOC 2-certified.

@@ -4,6 +4,13 @@
 // PRIVACY: this layer learns from the STRUCTURE of calls (which tools, which
 // fields, what capability was asked for) — NEVER from email content. Email
 // bodies never enter this store.
+//
+// DURABILITY: each record is ALSO mirrored fire-and-forget to RadMail's public
+// demand sink (src/lib/demand-sink.ts) so the signal survives process
+// restarts. Same privacy line — structure only, never content, never the API
+// key. Opt out with RADMAIL_TELEMETRY=off.
+
+import { emitDemandEvent } from "./demand-sink.js";
 
 export interface AgentProfile {
   agentId: string;
@@ -53,12 +60,14 @@ export function recordCall(agentId: string | undefined, tool: string, focus?: st
   p.lastSeen = new Date().toISOString();
   p.toolCalls.set(tool, (p.toolCalls.get(tool) ?? 0) + 1);
   if (focus && !p.focuses.includes(focus)) p.focuses.push(focus);
+  emitDemandEvent({ event: "call", tool, agentId: p.agentId });
 }
 
 export function recordNeed(agentId: string | undefined, note: string): AgentProfile {
   const p = profileFor(agentId ?? "anon");
   recordCall(agentId, "report_need");
   bumpDemand(note, p.agentId);
+  emitDemandEvent({ event: "need", tool: "report_need", agentId: p.agentId, note });
   return p;
 }
 
@@ -66,7 +75,9 @@ export function recordCapability(agentId: string | undefined, capability: string
   const p = profileFor(agentId ?? "anon");
   recordCall(agentId, "request_capability");
   if (!p.wishlist.includes(capability)) p.wishlist.push(capability);
-  return bumpDemand(capability, p.agentId);
+  const row = bumpDemand(capability, p.agentId);
+  emitDemandEvent({ event: "capability", tool: "request_capability", agentId: p.agentId, note: capability });
+  return row;
 }
 
 function bumpDemand(capability: string, agentId: string): DemandRow {

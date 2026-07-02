@@ -1,6 +1,6 @@
 {
   "name": "radmail-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": false,
   "description": "RadMail MCP server \u2014 email operating system for agents: two-axis triage (importance x urgency), a 'Right Now' lane, commitment follow-through, reviewable drafts, and a machine-verifiable BEC hard-stop (money / changed-banking / first-contact / decision / injection = human-only forever). Zero-auth in-memory sandbox, plus read-only CONNECTED mode: set RADMAIL_API_KEY and `search`/`read_email`/`list_right_now`/`list_commitments` work on your real RadMail inbox.",
   "license": "MIT",
@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --import tsx test/firewall.test.ts test/taint.test.ts test/connected.test.ts",
+    "test": "RADMAIL_TELEMETRY=off node --test --import tsx test/firewall.test.ts test/taint.test.ts test/connected.test.ts test/demand-sink.test.ts",
     "contract": "node scripts/check-tool-contract.mjs",
     "start": "node dist/src/index.js"
   },
