@@ -24,6 +24,12 @@ const CANONICAL = [
   "search",
 ];
 
+// Canonical on the PACKAGE surface only. Connected mode (RADMAIL_API_KEY) rides the
+// local npm/stdio package; the zero-auth hosted sandbox stays key-less by design, so
+// these must be advertised (mcp.json + llms.txt) and registered by the package, but
+// are NOT required of the live hosted sandbox.
+const PACKAGE_CANONICAL = ["read_email"];
+
 const fail = [];
 const ok = (m) => console.log(`  ✓ ${m}`);
 const bad = (m) => { fail.push(m); console.log(`  ✗ ${m}`); };
@@ -32,12 +38,12 @@ const bad = (m) => { fail.push(m); console.log(`  ✗ ${m}`); };
 const mcpJson = JSON.parse(readFileSync(join(ROOT, "public/.well-known/mcp.json"), "utf8"));
 const advertised = new Set(mcpJson.tools || []);
 console.log("mcp.json advertised tools:");
-for (const t of CANONICAL) advertised.has(t) ? ok(t) : bad(`mcp.json missing canonical tool "${t}"`);
+for (const t of [...CANONICAL, ...PACKAGE_CANONICAL]) advertised.has(t) ? ok(t) : bad(`mcp.json missing canonical tool "${t}"`);
 
 // 2. llms.txt mentions every canonical name
 const llms = readFileSync(join(ROOT, "llms.txt"), "utf8");
 console.log("llms.txt mentions:");
-for (const t of CANONICAL) llms.includes(`\`${t}\``) ? ok(t) : bad(`llms.txt missing canonical tool "${t}"`);
+for (const t of [...CANONICAL, ...PACKAGE_CANONICAL]) llms.includes(`\`${t}\``) ? ok(t) : bad(`llms.txt missing canonical tool "${t}"`);
 
 // 3. the package server actually registers every canonical name
 console.log("package server registers (dist):");
@@ -45,7 +51,7 @@ let registered = new Set();
 try {
   const mod = await import(join(ROOT, "dist/src/tools.js"));
   registered = new Set((mod.TOOL_DEFS || []).map((d) => d.name));
-  for (const t of CANONICAL) registered.has(t) ? ok(t) : bad(`server does not register canonical tool "${t}"`);
+  for (const t of [...CANONICAL, ...PACKAGE_CANONICAL]) registered.has(t) ? ok(t) : bad(`server does not register canonical tool "${t}"`);
 } catch (e) {
   bad(`could not import dist/src/tools.js (run \`npm run build\` first): ${e.message}`);
 }
@@ -66,6 +72,7 @@ if (process.env.SKIP_LIVE) {
     const jsonStr = text.includes("data:") ? text.split("data:").pop().trim() : text.trim();
     const live = new Set((JSON.parse(jsonStr).result?.tools || []).map((t) => t.name));
     for (const t of CANONICAL) live.has(t) ? ok(t) : bad(`live hosted sandbox does NOT expose canonical tool "${t}"`);
+    console.log(`  (package-only tools not required live: ${PACKAGE_CANONICAL.join(", ")} — connected mode is key-gated, the hosted sandbox stays key-less)`);
   } catch (e) {
     bad(`could not reach/parse live hosted sandbox: ${e.message}`);
   }

@@ -17,17 +17,23 @@ Money, changed-banking details, first-contact senders, decisions/sign-off, and p
 - `why_surfaced` — explain in plain English why a message was surfaced (the signals behind its importance × urgency). Transparency, not a black box.
 - `draft_reply` — draft a reply that discharges a commitment; refuses (human-only) for money / changed-banking / first-contact / decision / injection.
 - `list_commitments` — every open promise extracted from the batch, with its due window; RadMail drafts the follow-through on the due date (never auto-sent).
-- `search` — find the one message you mean by sender / subject / content (no filesystem grep), most-relevant + newest first.
+- `search` — find the one message you mean by sender / subject / content (no filesystem grep), most-relevant + newest first. Two modes: pass a `messages` batch (sandbox) or omit it with `RADMAIL_API_KEY` set to search the user's REAL inbox (connected, read-only; optional `from` / `after` / `before` filters).
+- `read_email` — connected mode only: fetch one full email (headers + `textBody`) from the real inbox by id. Read-only; body content arrives taint-tagged.
 - `provision_sandbox` — mint a free sandbox tenant (most tools auto-provision, so you rarely need this).
 - `report_need` / `request_capability` — tell RadMail what was awkward or what you wish existed; the surface adapts (call structure only, never email content).
 - `radmail_learning_insights` — what RadMail has learned about how you work.
 
 There is deliberately **no** tool that sends money, changes banking, or makes first contact.
 
+## Connected mode — search your real inbox (read-only)
+
+Set the `RADMAIL_API_KEY` environment variable on the local (stdio) server — create a key in about a minute at `https://app.radmail.ai/settings/api-keys` — and `search` (with `messages` omitted) finds any email the user has ever received, while `read_email` fetches the full message. `RADMAIL_API_URL` optionally overrides the API host (default `https://app.radmail.ai`). Connected mode is READ-ONLY by construction: it never sends, drafts against, or mutates real mail; every content-derived field arrives tagged `provenance:"untrusted-email-body"`; and it fails closed (invalid key / plan / timeout ⇒ an honest error, never fabricated results). The zero-auth hosted sandbox stays key-less and does not expose `read_email`.
+
 ## Connect
 
 - Zero-auth hosted sandbox (streamable-http, no key): `https://radmail.ai/api/mcp/sandbox`
-- Local stdio: `npx -y radmail-mcp`
+- Local stdio: `npx -y radmail-mcp` (activates the moment the npm publish lands; running from source works today)
+- Connected mode: `claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp`
 - Start in one call: call `triage_inbox` and **omit** the token — a free sandbox tenant is auto-provisioned; reuse the returned token. (On the hosted sandbox, `triage_inbox` needs no args — it triages a built-in demo inbox.)
 
 ## Compliance posture

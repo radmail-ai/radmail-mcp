@@ -3,7 +3,7 @@
   "name": "radmail",
   "displayName": "RadMail MCP",
   "description": "An email operating system for agents. Two-axis importance x urgency triage, per-sender behavioral learning, explainable 'why surfaced', autonomous follow-through on commitments, search to find the one message by sender/subject/content (no filesystem grep), and a deterministic BEC firewall: money, changed-banking, first-contact, decision, and prompt-injection are human-only forever.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "endpoint": "/api/mcp",
   "transport": "streamable-http",
   "auth": "optional — omit the token and a free sandbox tenant is auto-provisioned",
@@ -14,12 +14,18 @@
     "draft_reply",
     "list_commitments",
     "search",
+    "read_email",
     "triage",
     "provision_sandbox",
     "report_need",
     "request_capability",
     "radmail_learning_insights"
   ],
+  "connectedMode": {
+    "status": "available",
+    "note": "READ-ONLY connected mode ships in the radmail-mcp package (stdio): set the RADMAIL_API_KEY env var (get a key at https://app.radmail.ai/settings/api-keys) and `search` (with `messages` omitted) plus `read_email` operate on your REAL RadMail inbox via the v1 API. Connected mode never sends, drafts against, or mutates real mail; the BEC hard-stops stay human-only forever. The zero-auth hosted sandbox endpoint stays key-less and does not expose `read_email`.",
+    "envVars": ["RADMAIL_API_KEY", "RADMAIL_API_URL (optional, defaults to https://app.radmail.ai)"]
+  },
   "productionEngine": {
     "status": "gated",
     "note": "This package runs the SANDBOX engine (heuristic, in-memory, free, no creds). Real and runnable; the production multi-tenant '99%' engine is launch-gated."

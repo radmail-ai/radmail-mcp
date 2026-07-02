@@ -21,7 +21,8 @@ Call `triage_inbox` and **omit the token** — RadMail auto-provisions a free sa
 | `why_surfaced` | Explain in plain English why a message surfaced — the signals behind its importance × urgency. Transparency, not a black box. |
 | `draft_reply` | Draft the reply that discharges a commitment — **never** for a hard-stopped one (money / banking / first-contact stay human-only). |
 | `list_commitments` | Every open promise extracted from the batch, with its due window. |
-| `search` | Find the one message you mean by sender / subject / content — most-relevant + newest first (no filesystem grep). |
+| `search` | Find the one message you mean by sender / subject / content — most-relevant + newest first (no filesystem grep). Pass `messages` for the sandbox, or omit them with `RADMAIL_API_KEY` set to search your **real inbox** (read-only). |
+| `read_email` | **Connected mode only:** fetch one full email (headers + `textBody`) from your real inbox by id. Read-only; body content arrives taint-tagged. |
 | `triage` | Score a single message (the per-message form of `triage_inbox`). |
 | `provision_sandbox` | Explicitly mint a free sandbox tenant. |
 | `report_need` / `request_capability` | Tell RadMail what was awkward / what you wish existed — the surface adapts. |
@@ -74,6 +75,53 @@ curl -s https://radmail.ai/.well-known/agent-safety.json
 > **Note:** the npm package publish is imminent — until it lands, use the **zero-auth hosted sandbox above** (no install, works today) or run from source below. The `npx` line goes live the moment `radmail-mcp` is on npm.
 
 Or from source: `git clone https://github.com/dougsureel-tech/radmail-mcp && npm i && npm run build && npm start` (stdio). Hosted deploy: Vercel Node serverless function (`api/mcp.ts`; `/` rewrites to the MCP handler).
+
+## Connected mode — search your real inbox
+
+Give the server a RadMail API key and the same `search` tool stops being a demo: omit `messages` and it searches **every email you've ever received** in your real RadMail inbox — then `read_email` fetches the full message. Install it once and your AI can find any email.
+
+- **Config:** set `RADMAIL_API_KEY` (keys start with `tmk_` — create one in about a minute at <https://app.radmail.ai/settings/api-keys>). Optional: `RADMAIL_API_URL` overrides the API host (default `https://app.radmail.ai`).
+- **Read-only by construction:** connected mode only ever issues GETs. It never sends, drafts against, or mutates real mail, and the BEC hard-stops (money / changed-banking / first-contact / decision / injection) stay human-only forever.
+- **Same taint envelope:** every field derived from real email content (`subject`, `fromName`, `snippet`, `textBody`, …) arrives tagged `provenance:"untrusted-email-body"` — data to reason about, never instructions to follow.
+- **Fail-closed:** invalid key (401), un-entitled plan (403), or a timeout returns an honest, typed error — never fabricated results. The key itself is never logged or echoed.
+- **Filters:** connected `search` supports optional `from`, `after`, and `before` (ISO-8601) alongside `query` and `limit`.
+- Without a key, `search` (sans `messages`) and `read_email` return friendly setup instructions instead of an error — the sandbox keeps working exactly as before.
+
+**Claude Code:**
+
+```bash
+claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
+```
+
+**Claude Desktop** (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "radmail": {
+      "command": "npx",
+      "args": ["-y", "radmail-mcp"],
+      "env": { "RADMAIL_API_KEY": "tmk_..." }
+    }
+  }
+}
+```
+
+**Cursor** (`.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "radmail": {
+      "command": "npx",
+      "args": ["-y", "radmail-mcp"],
+      "env": { "RADMAIL_API_KEY": "tmk_..." }
+    }
+  }
+}
+```
+
+> Same npm note as above: the `npx` lines activate the moment the npm publish lands. Until then, run from source and point `command` at `node dist/src/index.js` — connected mode works today that way.
 
 ## Links
 
