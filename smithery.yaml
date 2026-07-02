@@ -1,0 +1,12 @@
+# Smithery registry config — https://smithery.ai
+# RadMail MCP: email OS for agents with a machine-verifiable BEC hard-stop.
+# Zero-auth in-memory sandbox — no credentials or config required to try it.
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties: {}
+  commandFunction: |-
+    () => ({ command: "node", args: ["dist/src/index.js"] })
+build:
+  dockerBuildPath: .
