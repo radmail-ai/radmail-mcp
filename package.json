@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "RADMAIL_TELEMETRY=off node --test --import tsx test/firewall.test.ts test/taint.test.ts test/connected.test.ts test/demand-sink.test.ts",
+    "test": "RADMAIL_TELEMETRY=off node --test --import tsx test/firewall.test.ts test/taint.test.ts test/connected.test.ts test/demand-sink.test.ts src/learning.test.ts",
     "contract": "node scripts/check-tool-contract.mjs",
     "start": "node dist/src/index.js"
   },
