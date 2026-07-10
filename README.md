@@ -6,6 +6,8 @@ Every inbox got an AI in 2026. None can be trusted to hit *send*. RadMail is the
 
 This is the Model Context Protocol (MCP) server, so any AI agent can use the inbox.
 
+**If a fleet of MCP agents runs your execution layer while you sit in the decision seat, the inbox is the most dangerous seat to hand them.** Most email MCP servers give the agent a send button — fine for transactional outbound, wrong for the account that moves your money, where one socially-engineered wire or banking change is irreversible. RadMail lets agents do the inbox's *work* (triage, the Right Now lane, commitment tracking, drafting) while the one irreversible seat stays yours **by construction, not by a policy an agent could be argued out of**. That split is what makes the company inbox delegable at all.
+
 ## Start in one call
 
 Call `triage_inbox` and **omit the token** — RadMail auto-provisions a free sandbox tenant and returns a working triage in one round-trip. Reuse the returned token. (On the zero-auth hosted sandbox, `triage_inbox` takes no args — it triages a built-in demo inbox so your very first call returns the full wedge.)
