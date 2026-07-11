@@ -32,7 +32,9 @@ const CANONICAL = [
 // these must be advertised (mcp.json + llms.txt) and registered by the package, but
 // are NOT required of the live hosted sandbox. `read_email` is the only connected-ONLY
 // tool (it has no sandbox mode) — the other connected tools live in CANONICAL above.
-const PACKAGE_CANONICAL = ["read_email"];
+// `check_send_domain` is zero-auth (read-only DNS, no key) but ships in the package
+// first; move it to CANONICAL once the hosted sandbox redeploys with it.
+const PACKAGE_CANONICAL = ["read_email", "check_send_domain"];
 
 const fail = [];
 const ok = (m) => console.log(`  ✓ ${m}`);

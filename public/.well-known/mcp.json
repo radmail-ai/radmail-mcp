@@ -15,6 +15,7 @@
     "list_commitments",
     "search",
     "read_email",
+    "check_send_domain",
     "triage",
     "provision_sandbox",
     "report_need",

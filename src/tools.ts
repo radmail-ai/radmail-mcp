@@ -38,6 +38,11 @@ import {
   type RawMessage,
 } from "./lib/triage.js";
 import {
+  normalizeDomain,
+  checkDomainHealth,
+  DKIM_PROBE_SELECTORS,
+} from "./lib/domain-health.js";
+import {
   getConnectedConfig,
   searchInbox,
   getEmail,
@@ -785,6 +790,48 @@ export function listCommitmentsTool(args: {
   return connectedCommitments(args, cfg);
 }
 
+// ─── 10. check_send_domain (zero-auth read-only DNS diagnostic) ─────────────
+// The PulseMCP indexing hook: a tool ANY agent can call with zero setup — no
+// token, no key, no tenant, no email content. Read-only DNS by construction;
+// there is no send capability anywhere near this path.
+export async function checkSendDomainTool(args: {
+  domain: string;
+  agentId?: string;
+  focus?: string;
+}): Promise<object> {
+  recordCall(args.agentId, "check_send_domain", args.focus);
+  const domain = normalizeDomain(args.domain);
+  if (!domain) {
+    return withSafety({
+      ok: false,
+      error: {
+        kind: "invalid-domain",
+        message:
+          `"${String(args.domain).slice(0, 200)}" does not look like a DNS domain. ` +
+          'Pass a bare domain like "example.com" — protocols, paths, ports, and a leading mailbox@ are stripped automatically.',
+      },
+      readOnly: true,
+      note: "Nothing was looked up. Fix the domain and retry.",
+    });
+  }
+  const health = await checkDomainHealth(domain);
+  return withSafety({
+    ok: true,
+    domain: health.domain,
+    spf: health.spf,
+    dmarc: health.dmarc,
+    dkim: health.dkim,
+    advice: health.advice,
+    lookupFailures: health.lookupFailures,
+    readOnly: true,
+    note:
+      "Read-only DNS diagnostic — nothing was sent and no record was touched. SPF/DMARC verdicts read the " +
+      "domain's live TXT records; DKIM probes the common selectors (" +
+      DKIM_PROBE_SELECTORS.join(", ") +
+      ") so a custom selector may exist even when none were found. This tool has no send capability.",
+  });
+}
+
 // ─── Tool registry (name + description + zod input shape + handler) ─────────
 import { TOOL_DESCRIPTION_TAINT_SUFFIX } from "./lib/taint.js";
 
@@ -891,6 +938,28 @@ export const TOOL_DEFS: ToolDef[] = [
       focus: z.string().max(60).optional(),
     },
     handler: readEmailTool,
+  },
+  {
+    name: "check_send_domain",
+    description:
+      "ZERO-AUTH email-deliverability read for ANY domain (e.g. \"example.com\") — no token, no key, no signup. " +
+      "Fetches and grades the domain's live SPF, DMARC, and DKIM DNS posture: a verdict per record type " +
+      "(pass / warn / fail / none), the raw records, parsed details (SPF all-qualifier + DNS-lookup-count risk; " +
+      "DMARC p= policy, pct, rua reporting; which common DKIM selectors publish a key or a delegated CNAME), " +
+      "plus plain-language `advice` lines you can act on. READ-ONLY DNS by construction: it never sends mail " +
+      "and never changes a record — there is no send capability on this surface.",
+    inputSchema: {
+      domain: z
+        .string()
+        .min(1)
+        .max(255)
+        .describe(
+          'The domain to check, e.g. "example.com". URLs / mailbox@ / trailing dots are normalized automatically.',
+        ),
+      agentId: z.string().max(80).optional().describe("Stable id for YOUR agent (no PII)."),
+      focus: z.string().max(60).optional(),
+    },
+    handler: checkSendDomainTool,
   },
   {
     name: "provision_sandbox",
