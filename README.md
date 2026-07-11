@@ -23,6 +23,7 @@ Call `triage_inbox` and **omit the token** — RadMail auto-provisions a free sa
 | `list_commitments` | Open promises with their due window. Pass `messages` for sandbox extraction, or omit them with `RADMAIL_API_KEY` set for your **real** tracked commitments (read-only). |
 | `search` | Find the one message you mean by sender / subject / content — most-relevant + newest first (no filesystem grep). Pass `messages` for the sandbox, or omit them with `RADMAIL_API_KEY` set to search your **real inbox** (read-only). |
 | `read_email` | **Connected mode only:** fetch one full email (headers + `textBody`) from your real inbox by id. Read-only; body content arrives taint-tagged. |
+| `check_send_domain` | **Zero-auth**, works on any domain: read-only SPF / DKIM / DMARC health read (verdicts + raw records + plain-language advice). Probes the common DKIM selectors (`default`, `google`, `resend`, `sendgrid`, `mail`, `k1`, `s1`, `s2`). Read-only DNS — no key, no send capability. |
 | `triage` | Score a single message (the per-message form of `triage_inbox`). |
 | `provision_sandbox` | Explicitly mint a free sandbox tenant. |
 | `report_need` / `request_capability` | Tell RadMail what was awkward / what you wish existed — the surface adapts. |
