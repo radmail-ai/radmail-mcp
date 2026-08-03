@@ -1,6 +1,6 @@
 # RadMail MCP — PUBLISH BLITZ (ready-to-fire)
 
-**Status: STAGED, NOT FIRED.** Repo is private at `github.com/dougsureel-tech/radmail-mcp`. Nothing here has been published, pushed public, or submitted. This doc fires in one shot the moment Doug supplies the neutral org name.
+**Status: ✅ FIRED (historical playbook).** The repo is public at `github.com/radmail-ai/radmail-mcp`, `radmail-mcp` is live on npm (`npx -y radmail-mcp` works), and registry/listing submissions are tracked separately in the private product repo. The fire-sequence below is kept as the record of how the publish was staged — do not re-run it.
 
 **Placeholder convention:** every public-facing artifact uses `radmail-ai` (the neutral GitHub org, name TBD). `radmail-ai` appears in exactly two tracked files — `server.json` (`repository.url`) and this doc. Set it once, sed-replace, fire. The published registry server NAME is `ai.radmail/radmail-mcp` (brand-carrying, no org handle) — see Namespace options below.
 
