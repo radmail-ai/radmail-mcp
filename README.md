@@ -77,7 +77,7 @@ curl -s https://radmail.ai/.well-known/agent-safety.json
 
 > `radmail-mcp` is live on npm — the `npx` line above works as-is. Prefer no install at all? Use the **zero-auth hosted sandbox above**.
 
-Or from source: `git clone https://github.com/dougsureel-tech/radmail-mcp && npm i && npm run build && npm start` (stdio). Hosted deploy: Vercel Node serverless function (`api/mcp.ts`; `/` rewrites to the MCP handler).
+Or from source: `git clone https://github.com/radmail-ai/radmail-mcp && npm i && npm run build && npm start` (stdio). Hosted deploy: Vercel Node serverless function (`api/mcp.ts`; `/` rewrites to the MCP handler).
 
 ## Connected mode — your real inbox
 
@@ -97,6 +97,19 @@ Search it, read it, know what matters now, know what's owed — install it once 
 - **Filters & paging:** connected `search` supports optional `from`, `after`, and `before` (ISO-8601) alongside `query` and `limit`; connected `list_right_now` / `list_commitments` support `limit` and `offset`.
 - **No fabricated judgments:** connected `list_right_now` surfaces the live engine's own band / importance / urgency / reasons as-is — it never invents local hard-stop determinations the API didn't return.
 - Without a key, `search` / `list_right_now` / `list_commitments` (sans `messages`) and `read_email` return friendly setup instructions instead of an error — the sandbox keeps working exactly as before.
+
+### The live engine is owner-taught
+
+Connected mode reads a live engine the inbox owner actively teaches — the band / importance / reasons you get back reflect these controls (all live in the RadMail app at <https://app.radmail.ai>):
+
+- **VIP senders** — an owner-named "always important" allow-list (a banker, a key partner). VIP is the top reputation override — it beats reply-history and every heuristic.
+- **Muted senders** — the explicit "never important" twin. A mute suppresses sender reputation only; regulator notices and past-due signals still surface (a mute never hides a real compliance notice).
+- **Delegates** — additional addresses (an assistant, an operations manager) that receive owner-level engagement treatment in the importance model. Importance-only: delegates never gain send or approval authority.
+- **One-click teaching** — every daily-digest item carries signed 👍/👎 feedback links (plus a ⭐ "always important from this sender" action) that tune future ranking.
+- **Own-product demotion** — the owner's own SaaS / notification mail can't ride reply history into the important lane.
+- **Daily digest** — an opt-in consolidated "needs you" email, delivered once a day at 7am in the org's local timezone, that silences per-email pings while the Right Now lane keeps firing.
+
+How real mail gets in today: RadMail's Apple Mail connector (macOS) feeds connected inboxes; hosted Gmail / Microsoft 365 OAuth connectors are pre-release.
 
 **Claude Code:**
 
@@ -132,7 +145,7 @@ claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
 }
 ```
 
-> Same npm note as above: the `npx` lines activate the moment the npm publish lands. Until then, run from source and point `command` at `node dist/src/index.js` — connected mode works today that way.
+> `radmail-mcp` is live on npm, so the `npx` lines above work as-is. Prefer source? Point `command` at `node dist/src/index.js` — connected mode works the same way.
 
 ## Telemetry (demand signals — opt-out)
 
