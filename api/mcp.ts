@@ -11,21 +11,68 @@
 // exports select the web signature unambiguously.
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createServer } from "../src/server.js";
+import { SERVER_INSTRUCTIONS } from "../src/server-info.js";
+import { TOOL_DEFS } from "../src/tools.js";
+import { TOOL_MANIFEST } from "../src/tool-manifest.js";
+import { verifyToolManifest, type ManifestVerification } from "../src/lib/manifest.js";
 import { checkRateLimit, clientIp } from "../src/lib/rate-limit.js";
 
-export async function GET(): Promise<Response> {
-  // Health / discovery ping — not the MCP channel itself (which is POST).
+/** JSON-RPC-shaped fail-closed response for a tool-manifest mismatch. MCP
+ *  clients get a named -32000 error instead of a bare platform 500 — fail
+ *  loud, not opaque. Exported for tests. */
+export function manifestMismatchResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message:
+          "server disabled: tool manifest mismatch — the published tool surface failed fail-closed " +
+          "verification against the frozen manifest (tool-description poisoning defense). " +
+          "No tools are served until the surface is re-blessed (npm run manifest:regen) and redeployed.",
+      },
+      id: null,
+    }),
+    { status: 503, headers: { "content-type": "application/json" } },
+  );
+}
+
+/** Health/discovery body. The health check runs the SAME manifest verification
+ *  the serving path enforces — a drifted deploy must read 503 here, not
+ *  "healthy" while every POST fails. Exported (with injectable verification)
+ *  for tests. */
+export function healthResponse(
+  verification: ManifestVerification = verifyToolManifest(TOOL_MANIFEST, TOOL_DEFS, SERVER_INSTRUCTIONS),
+): Response {
+  if (!verification.ok) {
+    return new Response(
+      JSON.stringify({
+        name: "radmail-mcp",
+        status: "disabled",
+        error: "server disabled: tool manifest mismatch — fail-closed (tool-description poisoning defense)",
+        mismatches: verification.mismatches,
+      }),
+      { status: 503, headers: { "content-type": "application/json" } },
+    );
+  }
   return new Response(
     JSON.stringify({
       name: "radmail-mcp",
       engine: "sandbox",
       transport: "streamable-http",
       endpoint: "/api/mcp",
+      toolManifest: "verified",
       note: "POST JSON-RPC MCP requests here. Zero-auth sandbox; tools auto-provision a tenant.",
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
+}
+
+export async function GET(): Promise<Response> {
+  // Health / discovery ping — not the MCP channel itself (which is POST).
+  return healthResponse();
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -51,7 +98,19 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const server = createServer();
+  // createServer() runs the fail-closed manifest gate and THROWS on drift —
+  // keep it inside a try so the refusal reaches the client as a JSON-RPC
+  // -32000 "server disabled", not a bare platform 500.
+  let server: McpServer;
+  try {
+    server = createServer();
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("TOOL MANIFEST MISMATCH")) {
+      return manifestMismatchResponse();
+    }
+    throw err;
+  }
+
   const transport = new WebStandardStreamableHTTPServerTransport({
     // Stateless: no session id generator. JSON responses (no long-lived SSE) suit
     // a serverless function with a per-request lifecycle.

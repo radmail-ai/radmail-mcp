@@ -3,7 +3,7 @@
   "name": "radmail",
   "displayName": "RadMail MCP",
   "description": "An email operating system for agents. Two-axis importance x urgency triage, per-sender behavioral learning, explainable 'why surfaced', autonomous follow-through on commitments, search to find the one message by sender/subject/content (no filesystem grep), and a deterministic BEC firewall: money, changed-banking, first-contact, decision, and prompt-injection are human-only forever.",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "endpoint": "/api/mcp",
   "transport": "streamable-http",
   "auth": "optional — omit the token and a free sandbox tenant is auto-provisioned",

@@ -19,10 +19,12 @@
     "node": ">=20"
   },
   "scripts": {
+    "prebuild": "npm run manifest:check",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "RADMAIL_TELEMETRY=off node --test --import tsx test/firewall.test.ts test/taint.test.ts test/connected.test.ts test/demand-sink.test.ts test/send-domain.test.ts test/manifest.test.ts src/learning.test.ts",
+    "test": "RADMAIL_TELEMETRY=off node --test --import tsx test/firewall.test.ts test/taint.test.ts test/connected.test.ts test/demand-sink.test.ts test/send-domain.test.ts test/manifest.test.ts test/api-mcp.test.ts src/learning.test.ts",
     "contract": "node scripts/check-tool-contract.mjs",
+    "manifest:check": "RADMAIL_TELEMETRY=off node --import tsx scripts/check-tool-manifest.ts",
     "manifest:regen": "RADMAIL_TELEMETRY=off node --import tsx scripts/regen-tool-manifest.ts",
     "start": "node dist/src/index.js"
   },
@@ -40,7 +42,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
     "zod": "^3.23.8",
-    "zod-to-json-schema": "^3.24.1"
+    "zod-to-json-schema": "3.25.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

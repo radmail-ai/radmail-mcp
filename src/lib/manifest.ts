@@ -21,12 +21,27 @@
 //
 // Legitimate description changes are a DELIBERATE, diffable act:
 //   npm run manifest:regen   (lints first, then rewrites src/tool-manifest.ts)
+//
+// FREEZE COVERAGE (scope honesty): the freeze covers the TOOL_DEFS data —
+// name + description + published input schema — plus SERVER_INSTRUCTIONS.
+// It does NOT cover registration-call fields added outside TOOL_DEFS (a
+// `title` or `annotations` passed to registerTool, or an extra registerTool
+// after the loop in src/server.ts), nor out-of-band listing surfaces like
+// public/.well-known/mcp.json. Those are agent-facing too: keep them sourced
+// from / synced with the frozen surface (guarded by tests where possible).
 
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { ToolDef } from "../tools.js";
-import { TOOL_MANIFEST } from "../tool-manifest.js";
+
+// NOTE: this module must NOT import src/tool-manifest.ts — the manifest:regen
+// script imports this module and must run when the artifact does not exist yet
+// (bootstrap). The frozen manifest is always passed in by the caller
+// (src/server.ts passes TOOL_MANIFEST explicitly).
 
 export const MANIFEST_ALGORITHM = "sha256/canonical-json/zod-to-json-schema" as const;
 
@@ -38,10 +53,44 @@ export interface FrozenToolEntry {
 export interface FrozenManifest {
   version: 1;
   algorithm: string;
+  /** Installed zod-to-json-schema version at freeze time. The hashes pin that
+   *  converter's OUTPUT, so a converter upgrade legitimately moves every hash —
+   *  recording the version lets the mismatch error say "dependency drift, run
+   *  manifest:regen" instead of accusing the build of poisoning. Diagnostic
+   *  only: not part of manifestSha256 (see manifestSha256Of). */
+  converterVersion: string;
   serverInstructionsSha256: string;
   tools: FrozenToolEntry[];
   /** sha256 over {algorithm, serverInstructionsSha256, tools} — one line to diff. */
   manifestSha256: string;
+}
+
+/** Installed zod-to-json-schema version — resolved from the actual package on
+ *  disk (its exports map hides package.json, so walk up from the entry file).
+ *  Best-effort: "unknown" when it cannot be located (e.g. an exotic bundler);
+ *  the schema hashes remain the authoritative check either way. */
+export function converterVersion(): string {
+  try {
+    const require = createRequire(import.meta.url);
+    let dir = dirname(require.resolve("zod-to-json-schema"));
+    for (let i = 0; i < 6; i++) {
+      try {
+        const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
+          name?: string;
+          version?: string;
+        };
+        if (pkg.name === "zod-to-json-schema" && pkg.version) return pkg.version;
+      } catch {
+        /* not here — keep walking up */
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+    /* fall through */
+  }
+  return "unknown";
 }
 
 // ─── Canonicalization ───────────────────────────────────────────────────────
@@ -70,6 +119,9 @@ function sha256Hex(s: string): string {
  *  SDK applies when it serves tools/list, so the hash pins the WIRE surface,
  *  not a private representation. `$schema` (constant noise) is stripped. */
 export function publishedInputSchema(def: ToolDef): Record<string, unknown> {
+  // Converter options: the SDK converts with {strictUnions: true, pipeStrategy:
+  // 'input'}; defaults here were probed equivalent for every construct in this
+  // surface (only .pipe() diverges, where defaults hash a SUPERSET of both branches).
   const schema = zodToJsonSchema(z.object(def.inputSchema)) as Record<string, unknown>;
   delete schema.$schema;
   return schema;
@@ -87,7 +139,9 @@ export function toolSha256(def: ToolDef): string {
 }
 
 /** Manifest hash over the summary rows — tampering with any row, or with the
- *  instructions hash, changes this one line. */
+ *  instructions hash, changes this one line. converterVersion is deliberately
+ *  EXCLUDED: it is a diagnostic hint, and environments where it resolves to
+ *  "unknown" (bundlers) must still verify GREEN against a pristine surface. */
 function manifestSha256Of(serverInstructionsSha256: string, tools: FrozenToolEntry[]): string {
   return sha256Hex(canonicalJson({ algorithm: MANIFEST_ALGORITHM, serverInstructionsSha256, tools }));
 }
@@ -102,6 +156,7 @@ export function computeToolManifest(defs: readonly ToolDef[], serverInstructions
   return {
     version: 1,
     algorithm: MANIFEST_ALGORITHM,
+    converterVersion: converterVersion(),
     serverInstructionsSha256,
     tools,
     manifestSha256: manifestSha256Of(serverInstructionsSha256, tools),
@@ -133,6 +188,26 @@ export function verifyToolManifest(
     );
   }
 
+  // Converter drift (finding: floating converter = outage that accuses itself
+  // of being an attack). The hashes pin zod-to-json-schema's OUTPUT, so a
+  // version change legitimately moves them — name the real cause and the real
+  // remedy. Skipped when either side is unknown/unrecorded: the hash rows stay
+  // authoritative.
+  const frozenConverter = frozen.converterVersion;
+  const liveConverter = live.converterVersion;
+  if (
+    typeof frozenConverter === "string" &&
+    frozenConverter !== "unknown" &&
+    liveConverter !== "unknown" &&
+    frozenConverter !== liveConverter
+  ) {
+    mismatches.push(
+      `converter version changed: zod-to-json-schema ${frozenConverter} (frozen) → ${liveConverter} (installed) — ` +
+        `this is dependency drift, NOT poisoning; the hashes pin the converter's output. ` +
+        `Fix: npm run manifest:regen, then review the diff of src/tool-manifest.ts`,
+    );
+  }
+
   if (live.serverInstructionsSha256 !== frozen.serverInstructionsSha256) {
     mismatches.push(
       `server instructions changed: frozen ${frozen.serverInstructionsSha256}, live ${live.serverInstructionsSha256}`,
@@ -140,7 +215,18 @@ export function verifyToolManifest(
   }
 
   const frozenByName = new Map(frozen.tools.map((t) => [t.name, t.sha256]));
-  const liveByName = new Map(live.tools.map((t) => [t.name, t.sha256]));
+  // Build the live map by hand: Map(entries) would silently dedupe a duplicate
+  // name, leaving only the unnamed manifest-hash backstop to catch it.
+  const liveByName = new Map<string, string>();
+  for (const t of live.tools) {
+    if (liveByName.has(t.name)) {
+      mismatches.push(
+        `duplicate tool name "${t.name}" — two live tool definitions publish the same name, so no single hash can be bound to it`,
+      );
+    } else {
+      liveByName.set(t.name, t.sha256);
+    }
+  }
 
   for (const [name, sha] of liveByName) {
     const frozenSha = frozenByName.get(name);
@@ -168,22 +254,28 @@ export function verifyToolManifest(
 }
 
 /** Startup gate. Throws (fail closed — the server refuses to serve tools) when
- *  the live tool surface diverges from the checked-in frozen manifest. */
+ *  the live tool surface diverges from the frozen manifest. The frozen
+ *  manifest is a required argument (no default import of src/tool-manifest.ts)
+ *  so that manifest:regen can import this module before the artifact exists. */
 export function assertToolManifest(
   defs: readonly ToolDef[],
   serverInstructions: string,
-  frozen: FrozenManifest = TOOL_MANIFEST,
+  frozen: FrozenManifest,
 ): void {
   const v = verifyToolManifest(frozen, defs, serverInstructions);
   if (!v.ok) {
+    const converterDrift = v.mismatches.some((m) => m.includes("converter version changed"));
     throw new Error(
       "TOOL MANIFEST MISMATCH — refusing to serve tools (fail closed).\n" +
         "The tool descriptions/schemas this build would publish do not match the frozen manifest " +
         "(src/tool-manifest.ts). This is the defense against tool-description poisoning " +
         "(OWASP ASI02/ASI04): a poisoned, tampered, or drifted surface must never reach an agent.\n" +
         v.mismatches.map((m) => `  ✗ ${m}`).join("\n") +
-        "\nIf this change is INTENTIONAL, regenerate deliberately and review the diff:\n" +
-        "  npm run manifest:regen",
+        (converterDrift
+          ? "\nLIKELY CAUSE: the zod-to-json-schema converter version changed — dependency drift, " +
+            "not poisoning. Fix: npm run manifest:regen (then review the diff)."
+          : "\nIf this change is INTENTIONAL, regenerate deliberately and review the diff:\n" +
+            "  npm run manifest:regen"),
     );
   }
 }
@@ -209,7 +301,14 @@ const URL_RE = /https?:\/\/[^\s"'`<>)\]]+/gi;
 
 function urlAllowed(raw: string): boolean {
   try {
-    const host = new URL(raw).hostname.toLowerCase();
+    // Prose punctuation: a sentence ending "…see https://radmail.ai." matches
+    // URL_RE with the trailing dot attached, and the URL parser keeps it in
+    // the hostname ("radmail.ai." !== "radmail.ai") — a legitimate description
+    // would trip no-external-urls and hard-block manifest:regen. Strip
+    // trailing dots/punctuation before the allowlist check. Lookalike hosts
+    // (radmail.ai.evil.com) still fail: the check anchors on the WHOLE
+    // remaining hostname.
+    const host = new URL(raw).hostname.toLowerCase().replace(/[.,;:!?]+$/, "");
     return host === "radmail.ai" || host.endsWith(".radmail.ai");
   } catch {
     return false;

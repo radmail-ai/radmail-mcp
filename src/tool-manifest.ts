@@ -16,6 +16,7 @@ import type { FrozenManifest } from "./lib/manifest.js";
 export const TOOL_MANIFEST: FrozenManifest = {
   "version": 1,
   "algorithm": "sha256/canonical-json/zod-to-json-schema",
+  "converterVersion": "3.25.2",
   "serverInstructionsSha256": "4c0e11714b87889452d36e57ab0e830ae57ea2f2c9d30c5fad83ca1eb554b2ef",
   "tools": [
     {

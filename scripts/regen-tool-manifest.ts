@@ -14,8 +14,11 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
+// IMPORTANT (bootstrap): import SERVER_INSTRUCTIONS from server-info.ts, NOT
+// server.ts — server.ts statically imports src/tool-manifest.ts, and this
+// script must run when that artifact does not exist yet.
 import { TOOL_DEFS } from "../src/tools.js";
-import { SERVER_INSTRUCTIONS } from "../src/server.js";
+import { SERVER_INSTRUCTIONS } from "../src/server-info.js";
 import { computeToolManifest, lintToolDescriptions } from "../src/lib/manifest.js";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "tool-manifest.ts");
