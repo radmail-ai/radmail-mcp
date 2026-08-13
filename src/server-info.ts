@@ -7,7 +7,7 @@
 export const SERVER_INFO = {
   name: "radmail-mcp",
   // Keep in lockstep with package.json "version" (guarded by test/manifest.test.ts).
-  version: "0.4.0",
+  version: "0.5.0",
 } as const;
 
 export const SERVER_INSTRUCTIONS =
