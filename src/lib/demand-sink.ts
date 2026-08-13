@@ -25,6 +25,9 @@ const TIMEOUT_MS = 3_000;
 const TOOL_MAX = 60;
 const AGENT_ID_MAX = 80;
 const NOTE_MAX = 500;
+/** Capability labels are short names, not prose — a tighter cap than NOTE_MAX
+ *  so this path can never become a free-text channel by another name. */
+const CAPABILITY_NOTE_MAX = 200;
 
 export type DemandEventType = "call" | "need" | "capability";
 
@@ -47,6 +50,19 @@ export function __setDemandFetchForTests(f: FetchLike | null): void {
 /** Telemetry is ON unless RADMAIL_TELEMETRY=off (case-insensitive). */
 export function telemetryEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return (env.RADMAIL_TELEMETRY ?? "").trim().toLowerCase() !== "off";
+}
+
+/**
+ * Agent-authored FREE TEXT (`report_need` notes) is OPT-IN — the opposite
+ * polarity to telemetryEnabled above, deliberately. Telemetry as a whole is a
+ * product-analytics default; a free-text field an agent can paste a patient
+ * email into is a PHI hazard, so it defaults CLOSED and only an explicit
+ * RADMAIL_TELEMETRY_NOTES=on turns it on. Anything other than exactly "on"
+ * (unset, empty, "true", "1", garbage) means OFF — a fail-safe polarity, so a
+ * typo cannot silently enable it.
+ */
+export function freeTextNotesEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.RADMAIL_TELEMETRY_NOTES ?? "").trim().toLowerCase() === "on";
 }
 
 /** The safe api-key prefix (`tmk_live_` + 4 chars) — or null. NEVER the key. */
@@ -74,7 +90,32 @@ export function emitDemandEvent(ev: DemandEvent, env: NodeJS.ProcessEnv = proces
     };
     if (ev.tool) body.tool = ev.tool.slice(0, TOOL_MAX);
     if (ev.agentId) body.agent_id = ev.agentId.slice(0, AGENT_ID_MAX);
-    if (ev.note) body.note = ev.note.slice(0, NOTE_MAX);
+
+    // ── PHI: agent-authored FREE TEXT is opt-IN, capability names are not ────
+    // `note` carries two different things (see learning.ts):
+    //   · event "capability" → the requested capability NAME (recordCapability
+    //     passes `note: capability`) — a short bounded label, and the entire
+    //     point of the signal.
+    //   · event "need"       → arbitrary agent-authored prose (recordNeed).
+    // An agent summarising a patient email into that second one would POST PHI
+    // to the SHARED platform sink, defeating a regulated tenant's dedicated-DB
+    // isolation. Telemetry is opt-OUT and on by default, so that happens
+    // silently.
+    //
+    // Dropping `note` wholesale was the obvious fix and is WRONG: it would
+    // silently darken the capability demand signal this sink exists to collect.
+    // So: keep bounded capability labels, gate free text behind
+    // RADMAIL_TELEMETRY_NOTES=on (default OFF, opposite polarity to
+    // RADMAIL_TELEMETRY on purpose — the risky field defaults closed).
+    if (ev.note) {
+      if (ev.event === "capability") {
+        body.note = ev.note.slice(0, CAPABILITY_NOTE_MAX);
+      } else if (freeTextNotesEnabled(env)) {
+        body.note = ev.note.slice(0, NOTE_MAX);
+      }
+      // else: dropped. Deliberately silent — this is a privacy default, not an
+      // error, and a warning here would leak the note into stderr/logs.
+    }
 
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (connected) {

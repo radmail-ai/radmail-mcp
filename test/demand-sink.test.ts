@@ -83,10 +83,13 @@ test("in-memory records mirror to the sink: call / need / capability", async () 
     events.map((e) => e.event),
     ["call", "call", "need", "call", "capability"],
   );
+  // The event SHAPE is unchanged; what travels in `note` is not. Agent-authored
+  // free text (report_need) is now opt-IN because it is a PHI hazard on the
+  // SHARED sink; a capability LABEL still travels, because that is the signal.
   const need = events.find((e) => e.event === "need");
-  assert.equal(need.note, "wish: calendar view");
+  assert.equal(need.note, undefined, "report_need free text must be opt-in (RADMAIL_TELEMETRY_NOTES=on)");
   const cap = events.find((e) => e.event === "capability");
-  assert.equal(cap.note, "snooze_email");
+  assert.equal(cap.note, "snooze_email", "capability label must survive — dropping it darkens the demand signal");
   for (const e of events) assert.equal(e.source, "sandbox-package");
 });
 
@@ -152,6 +155,9 @@ test("RADMAIL_DEMAND_SINK_URL overrides the target", async () => {
 });
 
 test("note / tool / agent_id are clamped to the server caps", async () => {
+  // `need` free text only travels when explicitly opted in — assert the clamp on
+  // the path that can actually carry it, rather than deleting the coverage.
+  process.env.RADMAIL_TELEMETRY_NOTES = "on";
   emitDemandEvent({
     event: "need",
     tool: "t".repeat(200),
@@ -163,4 +169,72 @@ test("note / tool / agent_id are clamped to the server caps", async () => {
   assert.equal(body.tool.length, 60);
   assert.equal(body.agent_id.length, 80);
   assert.equal(body.note.length, 500);
+  delete process.env.RADMAIL_TELEMETRY_NOTES;
+});
+
+test("capability labels are clamped TIGHTER (200) so they cannot become a free-text channel", async () => {
+  captured = [];
+  mockFetch();
+  delete process.env.RADMAIL_TELEMETRY_NOTES; // opt-in OFF — label must still travel
+  emitDemandEvent({ event: "capability", tool: "request_capability", note: "c".repeat(2000) });
+  await settle();
+  const body = JSON.parse(String(captured[0].init.body));
+  assert.equal(body.note.length, 200, "a capability label must not be usable as a 500-char prose field");
+});
+
+// ── PHI: free-text notes are opt-IN, capability labels are not ──────────────
+// These assert the BODY SHAPE, not the absence of an error. Every sink failure
+// is swallowed by design, so "it didn't throw" proves nothing about what was
+// actually put on the wire — the only real evidence is the captured request.
+
+test("report_need free text is DROPPED by default (PHI hazard, opt-in)", async () => {
+  _resetLearning();
+  captured = [];
+  mockFetch();
+  delete process.env.RADMAIL_TELEMETRY_NOTES;
+
+  recordNeed("agent-1", "Patient Jane Doe asked about her MRI results on 3/14");
+  await settle();
+
+  const need = captured.find((c) => JSON.parse(String(c.init.body)).event === "need");
+  assert.ok(need, "the need event should still be emitted");
+  const body = JSON.parse(String(need!.init.body)) as Record<string, unknown>;
+  assert.equal(body.note, undefined, "agent free text must NOT reach the shared sink by default");
+  assert.equal(body.event, "need", "the demand signal itself must survive");
+});
+
+test("request_capability label SURVIVES the drop — the signal is not darkened", async () => {
+  _resetLearning();
+  captured = [];
+  mockFetch();
+  delete process.env.RADMAIL_TELEMETRY_NOTES;
+
+  recordCapability("agent-1", "bulk-archive");
+  await settle();
+
+  const cap = captured.find((c) => JSON.parse(String(c.init.body)).event === "capability");
+  assert.ok(cap, "capability event should be emitted");
+  const body = JSON.parse(String(cap!.init.body)) as Record<string, unknown>;
+  assert.equal(body.note, "bulk-archive", "capability NAME travels in note and must be preserved");
+});
+
+test("RADMAIL_TELEMETRY_NOTES=on restores free text; anything else does not", async () => {
+  for (const [value, expectNote] of [["on", true], ["true", false], ["1", false], ["ON", true]] as const) {
+    _resetLearning();
+    captured = [];
+    mockFetch();
+    process.env.RADMAIL_TELEMETRY_NOTES = value;
+
+    recordNeed("agent-1", "a plain product request");
+    await settle();
+
+    const need = captured.find((c) => JSON.parse(String(c.init.body)).event === "need");
+    const body = JSON.parse(String(need!.init.body)) as Record<string, unknown>;
+    assert.equal(
+      body.note !== undefined,
+      expectNote,
+      `RADMAIL_TELEMETRY_NOTES="${value}" should ${expectNote ? "enable" : "NOT enable"} free text`,
+    );
+  }
+  delete process.env.RADMAIL_TELEMETRY_NOTES;
 });
