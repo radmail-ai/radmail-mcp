@@ -320,12 +320,39 @@ export function analyzeDmarc(txtRecords: string[]): DmarcAnalysis {
  * randomly-generated token selectors per domain, so SES DKIM is UNPROBEABLE by
  * name. A `none` result therefore stays a "could not see it", never a "not
  * there" — which is what `dkimVerdict` already encodes by never failing.
+ *
+ * 🪞 SECOND PASS, SAME DAY — THE FIRST WIDENING REPEATED THIS EXACT BUG.
+ *
+ * The first version of this list added `mimecast20220301`, `kl`, `kl2` and
+ * `zoho` with confident per-provider comments. Checked against live DNS on each
+ * provider's OWN domain, three of those four were wrong:
+ *   · `mimecast20220301` — nothing, anywhere. Mimecast generates keys PER
+ *     TENANT with the creation date in the selector, so any single hardcoded
+ *     date matches essentially nobody, forever. It was born rotted.
+ *   · `kl` / `kl2` — empty on klaviyo.com and its sending domains.
+ *   · `zoho` — zoho.com's own selector is `1522905413783`; Zoho's wizard
+ *     defaults to an epoch-millisecond timestamp, not the literal "zoho".
+ *
+ * 🔑 A LIST WITH CONFIDENT PROVIDER COMMENTS AND UNVERIFIED ENTRIES IS THE SAME
+ * DEFECT THIS FILE WAS FIXING, one level up: it reads as covering Mimecast and
+ * Klaviyo, so nobody goes looking, and their domains keep getting the false
+ * "no DKIM" this change exists to prevent.
+ *
+ * ▶️ RULE: an entry earns its place by resolving on the provider's own domain,
+ * or it carries a comment saying what it does NOT cover. No entry goes in
+ * because it looks plausible.
+ *
+ * 🪤 And the check itself has a trap. `postmarkapp.com` and `hubspot.com` both
+ * publish WILDCARD TXT records, so every bogus name "resolves" — the three bad
+ * selectors above appeared to work on both. Verify on a domain WITHOUT a
+ * wildcard, or confirm the answer differs between two made-up names.
  */
 export const DKIM_PROBE_SELECTORS = [
   // generic / default convention
   "default",
   "mail",
-  // Microsoft 365 / Exchange Online — the gap this list was missing
+  // Microsoft 365 / Exchange Online — the gap this list was missing.
+  // Verified: selector1/selector2 CNAME to *.d-v1.dkim.mail.microsoft.
   "selector1",
   "selector2",
   // Google Workspace
@@ -339,25 +366,29 @@ export const DKIM_PROBE_SELECTORS = [
   // Mailchimp / Mandrill and other k-series providers
   "k1",
   "k2",
-  // Zoho Mail
-  "zoho",
   // Fastmail
   "fm1",
   "fm2",
   "fm3",
-  // Postmark
+  // Postmark. ⚠️ LEGACY ONLY — verified live at pm._domainkey.postmarkapp.com,
+  // but modern Postmark issues timestamped `<date>pm` selectors we cannot guess.
   "pm",
-  // Proton Mail
+  // Proton Mail — protonmail3 verified live (v=DKIM1 key on protonmail.com).
   "protonmail",
   "protonmail2",
-  // HubSpot
+  "protonmail3",
+  // HubSpot — verified live (hs1 CNAMEs to *.dkim.hubspotemail.net).
   "hs1",
   "hs2",
-  // Klaviyo
-  "kl",
-  "kl2",
-  // Mimecast
-  "mimecast20220301",
+  // Zoho. ⚠️ BEST-EFFORT — Zoho's wizard defaults to an epoch-ms timestamp
+  // (zoho.com itself uses 1522905413783), so this hits only hand-typed setups.
+  "zoho",
+  //
+  // 🚫 DELIBERATELY NOT HERE, so nobody re-adds them believing they work:
+  //   · mimecast20220301 / any Mimecast selector — per-tenant + date-stamped.
+  //   · kl / kl2 (Klaviyo) — not published under these names; Klaviyo dedicated
+  //     domains also sign on a `send.` subdomain an apex probe cannot reach.
+  //   · Amazon SES — three random per-domain tokens. Unguessable by design.
 ] as const;
 
 export type DkimSelectorStatus =
@@ -377,6 +408,10 @@ export interface DkimAnalysis {
   verdict: RecordVerdict;
   selectorsProbed: readonly string[];
   selectorsFound: DkimSelectorResult[];
+  /** True when every probed selector delegated to the SAME target — the
+   *  signature of a DNS wildcard, not of a mail configuration. Findings are
+   *  discarded when set, so this is the only trace that they existed. */
+  wildcardSuspected?: boolean;
 }
 
 /** Pure: classify one selector's TXT record strings (reference's
@@ -398,7 +433,26 @@ export function dkimVerdict(found: DkimSelectorResult[]): RecordVerdict {
   return "warn"; // none found — DKIM may exist under a custom selector, so never "fail"
 }
 
-async function probeDkimSelector(selector: string, domain: string): Promise<DkimSelectorResult> {
+/** 🩸 A TIMED-OUT PROBE USED TO BE REPORTED AS AN ABSENCE.
+ *
+ * `lookupTxt` already distinguishes "no-record" (an answer) from "lookup-failed"
+ * (no answer), and `checkDomainHealth` honours that distinction for SPF and
+ * DMARC — but the DKIM path threw it away, collapsing both into status "none".
+ * So a resolver timeout produced the confident line "No DKIM key found under the
+ * N selector names probed", with `lookupFailures: false` suppressing the
+ * re-run-to-confirm advice.
+ *
+ * ⚖️ That was already true at 8 selectors. It matters more now: widening to ~20
+ * roughly triples the concurrent burst against one authoritative nameserver,
+ * which is exactly the condition that provokes partial drops. Widening coverage
+ * without widening honesty would have traded a false negative for a quieter one.
+ *
+ * 🔑 "I looked and there is none" and "I could not look" are different facts.
+ */
+async function probeDkimSelector(
+  selector: string,
+  domain: string,
+): Promise<DkimSelectorResult & { lookupFailed?: boolean }> {
   const name = `${selector}._domainkey.${domain}`;
   const txt = await lookupTxt(name);
   if (txt.ok) {
@@ -410,7 +464,31 @@ async function probeDkimSelector(selector: string, domain: string): Promise<Dkim
   }
   const target = await lookupCname(name);
   if (target) return { selector, status: "delegated", delegatedTo: target };
-  return { selector, status: "none" };
+  const failed = !txt.ok && txt.reason === "lookup-failed";
+  return failed ? { selector, status: "none", lookupFailed: true } : { selector, status: "none" };
+}
+
+/** 🪤 WILDCARD DNS MAKES EVERY SELECTOR LOOK DELEGATED — a false PASS, which is
+ *  strictly worse than the false WARN this file set out to fix.
+ *
+ *  A parked domain with `*.example.com CNAME parking-host` answers every probed
+ *  name, so all N selectors come back "delegated" and the verdict reads "pass"
+ *  on a domain with no DKIM at all. Measured 2026-08-25: postmarkapp.com and
+ *  hubspot.com both publish wildcard TXT, and three selectors that exist nowhere
+ *  appeared to resolve on both.
+ *
+ *  The tell is that a wildcard cannot vary its answer: real DKIM delegation
+ *  gives each selector its OWN target. So "every probed selector delegated, all
+ *  to the same place" is a wildcard, not a mail configuration.
+ */
+export function looksLikeWildcardDelegation(
+  found: DkimSelectorResult[],
+  probedCount: number,
+): boolean {
+  const delegated = found.filter((s) => s.status === "delegated");
+  if (delegated.length < probedCount || probedCount < 2) return false;
+  const targets = new Set(delegated.map((s) => s.delegatedTo));
+  return targets.size === 1;
 }
 
 // ─── Advice (pure) ───────────────────────────────────────────────────────────
@@ -501,6 +579,10 @@ export function buildAdvice(
       advice.push(
         `DKIM selector(s) ${revoked.map((s) => s.selector).join(", ")} exist but publish an EMPTY p= (revoked key) — signing is off. Re-enable DKIM signing at your provider.`,
       );
+    } else if (dkim.wildcardSuspected) {
+      advice.push(
+        `EVERY probed DKIM selector resolved to the same target, which is the signature of a DNS WILDCARD (*.${'${'}domain}) rather than real DKIM delegation — each genuine selector gets its own target. Treating this as valid DKIM would be a false pass, so the results were discarded. If you do publish DKIM, confirm the exact selector on your provider's DNS page.`,
+      );
     } else {
       // ⚖️ Says "could not find", never "you have none" — the probe is a
       // name-guessing loop, so its silence is a limit of the list, not a fact
@@ -576,13 +658,21 @@ export async function checkDomainHealth(domain: string): Promise<DomainHealthRes
     : analyzeDmarc(dmarcTxt.ok ? dmarcTxt.records : []);
 
   const selectorsFound = selectorResults.filter((s) => s.status !== "none");
+  // 🪤 Wildcard DNS answers EVERY name, so every selector reads "delegated" and
+  // the verdict would be a false PASS — worse than the false WARN this file was
+  // written to fix. Discard the whole set when it has the wildcard signature.
+  const wildcard = looksLikeWildcardDelegation(selectorResults, DKIM_PROBE_SELECTORS.length);
+  const effectiveFound = wildcard ? [] : selectorsFound;
   const dkim: DkimAnalysis = {
-    verdict: dkimVerdict(selectorsFound),
+    verdict: dkimVerdict(effectiveFound),
     selectorsProbed: DKIM_PROBE_SELECTORS,
-    selectorsFound,
+    selectorsFound: effectiveFound,
+    wildcardSuspected: wildcard,
   };
 
-  const lookupFailures = apexFailed || dmarcFailed;
+  // A DKIM probe that TIMED OUT is not a DKIM probe that found nothing.
+  const dkimLookupFailed = selectorResults.some((s) => s.lookupFailed === true);
+  const lookupFailures = apexFailed || dmarcFailed || dkimLookupFailed;
   const advice = buildAdvice(spf, dmarc, dkim, lookupFailures);
 
   return { domain, spf, dmarc, dkim, advice, lookupFailures };

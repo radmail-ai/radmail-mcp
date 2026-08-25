@@ -376,10 +376,26 @@ test("probe list: covers Microsoft 365's selector1/selector2 — the v1 gap", ()
 test("probe list: s1/s2 are NOT a substitute for selector1/selector2", () => {
   // The v1 list had s1/s2 (SendGrid) and someone could reasonably assume those
   // covered Microsoft. They do not — different names, different lookups.
+  // 🪞 The first version of this test asserted notEqual("s1", "selector1") —
+  // two string LITERALS, which can never differ regardless of the code. A pin
+  // that cannot fail is decoration. It now asserts against the real list.
   const sels: readonly string[] = [...DKIM_PROBE_SELECTORS];
   assert.ok(sels.includes("s1") && sels.includes("s2"), "SendGrid's pair still covered");
-  assert.notEqual("s1", "selector1");
-  assert.notEqual("s2", "selector2");
+  assert.ok(
+    sels.includes("selector1") && sels.includes("selector2"),
+    "M365's pair must be present IN ADDITION — s1/s2 do not resolve M365 names",
+  );
+  assert.equal(new Set(sels).size, sels.length, "and they are four distinct probes, not two");
+});
+
+test("probe list: entries disproven against live DNS are NOT present", () => {
+  // 🩸 The first widening added these on plausibility. Checked against each
+  // provider's own domain they resolve nowhere; two "worked" only because
+  // postmarkapp.com and hubspot.com publish wildcard TXT.
+  const sels: readonly string[] = [...DKIM_PROBE_SELECTORS];
+  for (const dead of ["mimecast20220301", "kl", "kl2"]) {
+    assert.ok(!sels.includes(dead), `${dead} was disproven against live DNS — do not re-add`);
+  }
 });
 
 test("probe list: every entry is unique and non-empty", () => {
@@ -450,4 +466,78 @@ test("not-found advice states a LIMIT, not an absence, and names the unprobeable
     "advice must not assert an absence the probe never observed",
   );
   assert.ok(line!.includes("Amazon SES"), "must name the provider that cannot be probed by name");
+});
+
+
+// ─── DKIMHONEST1 (2026-08-25) — the two probe defects Fable surfaced ─────────
+
+test("WILDCARD: every selector delegating to ONE target is not DKIM, and must not pass", async () => {
+  // A parked domain with *.example.com CNAME parking-host answers every probed
+  // name. Without this, all N selectors read "delegated" and the verdict is
+  // "pass" on a domain with NO DKIM — a false pass, strictly worse than the
+  // false warn this file was written to fix.
+  const cname: Record<string, string> = {};
+  for (const sel of DKIM_PROBE_SELECTORS) {
+    cname[`${sel}._domainkey.${DOMAIN}`] = "parking.example.";
+  }
+  __setDnsForTests(fakeDns({ [DOMAIN]: ["v=spf1 -all"] }, cname));
+  const h = await checkDomainHealth(DOMAIN);
+  assert.equal(h.dkim.wildcardSuspected, true, "the wildcard signature must be detected");
+  assert.equal(h.dkim.verdict, "warn", "a wildcard must NOT grade as pass");
+  assert.deepEqual(h.dkim.selectorsFound, [], "wildcard findings are discarded, not reported");
+  assert.ok(h.advice.some((a) => a.includes("DNS WILDCARD")), "and it must be explained");
+});
+
+test("NEGATIVE CONTROL: genuine multi-selector DKIM with DIFFERENT targets still passes", async () => {
+  // Without this, the wildcard guard could suppress real M365 delegation, which
+  // would re-break the very domains this branch set out to fix.
+  __setDnsForTests(
+    fakeDns(
+      { [DOMAIN]: ["v=spf1 -all"] },
+      {
+        [`selector1._domainkey.${DOMAIN}`]: "sel1.dkim.mail.microsoft.",
+        [`selector2._domainkey.${DOMAIN}`]: "sel2.dkim.mail.microsoft.",
+      },
+    ),
+  );
+  const h = await checkDomainHealth(DOMAIN);
+  assert.notEqual(h.dkim.wildcardSuspected, true);
+  assert.equal(h.dkim.verdict, "pass");
+  assert.equal(h.dkim.selectorsFound.length, 2);
+});
+
+test("a DKIM lookup that FAILED is reported as lookupFailures, not as an absence", async () => {
+  // "I looked and there is none" and "I could not look" are different facts.
+  // A resolver timeout used to collapse into status "none" with
+  // lookupFailures:false, producing a confident "No DKIM key found".
+  // 🪞 THE FIRST VERSION OF THIS TEST PASSED WITHOUT THE FIX, and the control
+  // run is the only reason I know. It let `_dmarc` fail too, so `lookupFailures`
+  // was already true through the DMARC path — the assertion was satisfied by
+  // machinery that predates this change and proved nothing about DKIM.
+  // ⇒ SPF and DMARC must both resolve CLEANLY here. Only the _domainkey probes
+  //   fail, so `lookupFailures` can only become true via the DKIM path.
+  const boom = Object.assign(new Error("SERVFAIL"), { code: "SERVFAIL" });
+  __setDnsForTests({
+    async resolveTxt(name: string) {
+      if (name === DOMAIN) return [["v=spf1 -all"]];
+      if (name === `_dmarc.${DOMAIN}`) return [["v=DMARC1; p=reject; rua=mailto:d@x.com"]];
+      throw boom; // ONLY the _domainkey probes fail to RESOLVE
+    },
+    async resolveCname() {
+      throw boom;
+    },
+  });
+  const h = await checkDomainHealth(DOMAIN);
+  assert.equal(h.spf.verdict, "pass", "SPF must have answered — else this proves nothing");
+  assert.equal(h.dmarc.verdict, "pass", "DMARC must have answered — else this proves nothing");
+  assert.equal(h.lookupFailures, true, "a failed DKIM probe must surface as a lookup failure");
+});
+
+test("NEGATIVE CONTROL: clean ENOTFOUND on every selector is an ANSWER, not a failure", async () => {
+  // ENOTFOUND genuinely means "no such record". If this also set lookupFailures
+  // the flag would be permanently true and therefore meaningless.
+  __setDnsForTests(fakeDns({ [DOMAIN]: ["v=spf1 -all"], [`_dmarc.${DOMAIN}`]: ["v=DMARC1; p=reject"] }));
+  const h = await checkDomainHealth(DOMAIN);
+  assert.equal(h.lookupFailures, false, "ENOTFOUND is an answer — must not read as a failure");
+  assert.equal(h.dkim.verdict, "warn");
 });
