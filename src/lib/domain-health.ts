@@ -289,17 +289,75 @@ export function analyzeDmarc(txtRecords: string[]): DmarcAnalysis {
 // ─── DKIM (pure verdict + selector-probe orchestration) ──────────────────────
 
 /** The common selector names probed at `<selector>._domainkey.<domain>`.
- *  Covers the default convention plus Google Workspace, Resend, SendGrid
- *  (mail/s1/s2), and Mailchimp/generic (k1). */
+ *
+ * 🩸 MEASURED 2026-08-25 — MICROSOFT 365 WAS MISSING, AND IT IS THE LARGEST
+ * BUSINESS MAIL PROVIDER ON EARTH.
+ *
+ * The list below used to end at "s2", and its own comment enumerated Google,
+ * Resend, SendGrid and Mailchimp. M365 publishes under `selector1` /
+ * `selector2` — neither was probed, and `s1`/`s2` do NOT match them. So every
+ * Microsoft-365-hosted domain came back `selectorsFound: []` with the advice
+ * line *"No DKIM record found … Without DKIM, forwarded mail breaks SPF and has
+ * nothing to fall back on."*
+ *
+ * Caught on a real domain that is correctly configured:
+ *   selector1._domainkey.greenwellness.org
+ *     → CNAME selector1-greenwellness-org._domainkey.<tenant>.d-v1.dkim.mail.microsoft.
+ *   selector2._domainkey.greenwellness.org  → the matching CNAME
+ * Control: `zzz-nonexistent._domainkey.<same domain>` returns nothing, so the
+ * probe CAN report an absence — this was a false negative, not a dead lookup.
+ *
+ * 🔑 AN INSTRUMENT THAT CANNOT SEE A THING REPORTS ITS ABSENCE. The verdict
+ * layer was scrupulously honest (`dkimVerdict` never returns "fail", and says
+ * so in a comment) — but honesty about *this list* cannot rescue a domain the
+ * list was never going to reach. The narrow probe, not the verdict, was the bug.
+ *
+ * ⚖️ Cost of widening is close to zero: `checkDomainHealth` fans these out in a
+ * single `Promise.all`, so added selectors cost DNS queries, not wall-clock.
+ * That is exactly why the list should be generous rather than minimal.
+ *
+ * 🕳️ Still not exhaustive, and it cannot be: Amazon SES publishes three
+ * randomly-generated token selectors per domain, so SES DKIM is UNPROBEABLE by
+ * name. A `none` result therefore stays a "could not see it", never a "not
+ * there" — which is what `dkimVerdict` already encodes by never failing.
+ */
 export const DKIM_PROBE_SELECTORS = [
+  // generic / default convention
   "default",
-  "google",
-  "resend",
-  "sendgrid",
   "mail",
-  "k1",
+  // Microsoft 365 / Exchange Online — the gap this list was missing
+  "selector1",
+  "selector2",
+  // Google Workspace
+  "google",
+  // Resend
+  "resend",
+  // SendGrid (automated security uses s1/s2)
+  "sendgrid",
   "s1",
   "s2",
+  // Mailchimp / Mandrill and other k-series providers
+  "k1",
+  "k2",
+  // Zoho Mail
+  "zoho",
+  // Fastmail
+  "fm1",
+  "fm2",
+  "fm3",
+  // Postmark
+  "pm",
+  // Proton Mail
+  "protonmail",
+  "protonmail2",
+  // HubSpot
+  "hs1",
+  "hs2",
+  // Klaviyo
+  "kl",
+  "kl2",
+  // Mimecast
+  "mimecast20220301",
 ] as const;
 
 export type DkimSelectorStatus =
@@ -444,8 +502,13 @@ export function buildAdvice(
         `DKIM selector(s) ${revoked.map((s) => s.selector).join(", ")} exist but publish an EMPTY p= (revoked key) — signing is off. Re-enable DKIM signing at your provider.`,
       );
     } else {
+      // ⚖️ Says "could not find", never "you have none" — the probe is a
+      // name-guessing loop, so its silence is a limit of the list, not a fact
+      // about the domain. Amazon SES is named explicitly because its selectors
+      // are random per-domain tokens and are UNPROBEABLE by construction: an
+      // SES domain with perfect DKIM will always land here.
       advice.push(
-        `No DKIM record found under the ${dkim.selectorsProbed.length} common selectors probed (${dkim.selectorsProbed.join(", ")}). DKIM may still exist under a custom selector — check your provider's DNS setup page. Without DKIM, forwarded mail breaks SPF and has nothing to fall back on.`,
+        `No DKIM key found under the ${dkim.selectorsProbed.length} selector names probed — this means we could not FIND one, not that you have none. DKIM may still exist under a custom selector this list does not guess (Amazon SES uses random per-domain tokens that cannot be guessed at all). Confirm on your provider's DNS page: if DKIM really is off, forwarded mail breaks SPF and has nothing to fall back on.`,
       );
     }
   } else {

@@ -357,9 +357,97 @@ test("registration: handler works end-to-end with ONLY a domain arg (mocked DNS)
   assert.equal(r.domain, DOMAIN);
 });
 
-test("probe list: the advertised common selectors are exactly the v1 set", () => {
-  assert.deepEqual(
-    [...DKIM_PROBE_SELECTORS],
-    ["default", "google", "resend", "sendgrid", "mail", "k1", "s1", "s2"],
+// ─── DKIM selector coverage ──────────────────────────────────────────────────
+//
+// 🩸 The v1 list ended at "s2" and MISSED MICROSOFT 365 ENTIRELY, so every
+// M365-hosted domain — the largest business mail platform there is — was told
+// "No DKIM record found". Measured 2026-08-25 against a correctly-configured
+// live domain whose selector1/selector2 both CNAME to *.dkim.mail.microsoft.
+//
+// These tests are ordered cheapest-first: the membership assertions say WHAT
+// must be covered, and the end-to-end test proves the probe actually reaches it.
+
+test("probe list: covers Microsoft 365's selector1/selector2 — the v1 gap", () => {
+  const sels = [...DKIM_PROBE_SELECTORS];
+  assert.ok(sels.includes("selector1"), "M365 publishes under selector1");
+  assert.ok(sels.includes("selector2"), "M365 rotates to selector2");
+});
+
+test("probe list: s1/s2 are NOT a substitute for selector1/selector2", () => {
+  // The v1 list had s1/s2 (SendGrid) and someone could reasonably assume those
+  // covered Microsoft. They do not — different names, different lookups.
+  const sels: readonly string[] = [...DKIM_PROBE_SELECTORS];
+  assert.ok(sels.includes("s1") && sels.includes("s2"), "SendGrid's pair still covered");
+  assert.notEqual("s1", "selector1");
+  assert.notEqual("s2", "selector2");
+});
+
+test("probe list: every entry is unique and non-empty", () => {
+  const sels = [...DKIM_PROBE_SELECTORS];
+  assert.equal(new Set(sels).size, sels.length, "a duplicate selector wastes a DNS lookup");
+  assert.ok(sels.every((s) => s.length > 0));
+});
+
+test("probe list: keeps the whole v1 set — widening must never DROP coverage", () => {
+  const sels: readonly string[] = [...DKIM_PROBE_SELECTORS];
+  for (const original of ["default", "google", "resend", "sendgrid", "mail", "k1", "s1", "s2"]) {
+    assert.ok(sels.includes(original), `v1 selector ${original} must stay covered`);
+  }
+});
+
+test("M365-hosted domain: selector1/selector2 CNAMEs are FOUND and grade pass", async () => {
+  // The exact live shape of greenwellness.org on 2026-08-25. Pre-fix this
+  // returned verdict "warn" with selectorsFound: [] — a false negative on a
+  // domain whose DKIM is correctly configured.
+  __setDnsForTests(
+    fakeDns(
+      {
+        [DOMAIN]: ["v=spf1 include:spf.protection.outlook.com -all"],
+        [`_dmarc.${DOMAIN}`]: ["v=DMARC1; p=quarantine; rua=mailto:d@example.com"],
+      },
+      {
+        [`selector1._domainkey.${DOMAIN}`]:
+          "selector1-example-com._domainkey.tenant.d-v1.dkim.mail.microsoft.",
+        [`selector2._domainkey.${DOMAIN}`]:
+          "selector2-example-com._domainkey.tenant.d-v1.dkim.mail.microsoft.",
+      },
+    ),
   );
+  const h = await checkDomainHealth(DOMAIN);
+  assert.equal(h.dkim.verdict, "pass");
+  assert.deepEqual(
+    h.dkim.selectorsFound.map((s) => s.selector).sort(),
+    ["selector1", "selector2"],
+  );
+  assert.ok(
+    !h.advice.some((a) => a.includes("No DKIM key found")),
+    "must NOT advise that DKIM is missing on a domain that publishes it",
+  );
+});
+
+test("NEGATIVE CONTROL: a domain with no DKIM anywhere still warns", async () => {
+  // Without this, the test above could pass on a probe that reports "found"
+  // for everything. The widened list must still be able to say "not found".
+  __setDnsForTests(
+    fakeDns({
+      [DOMAIN]: ["v=spf1 include:spf.protection.outlook.com -all"],
+      [`_dmarc.${DOMAIN}`]: ["v=DMARC1; p=quarantine; rua=mailto:d@example.com"],
+    }),
+  );
+  const h = await checkDomainHealth(DOMAIN);
+  assert.equal(h.dkim.verdict, "warn");
+  assert.deepEqual(h.dkim.selectorsFound, []);
+  assert.ok(h.advice.some((a) => a.includes("No DKIM key found")));
+});
+
+test("not-found advice states a LIMIT, not an absence, and names the unprobeable case", async () => {
+  __setDnsForTests(fakeDns({ [DOMAIN]: ["v=spf1 -all"] }));
+  const h = await checkDomainHealth(DOMAIN);
+  const line = h.advice.find((a) => a.includes("No DKIM key found"));
+  assert.ok(line, "expected the not-found advice line");
+  assert.ok(
+    line!.includes("could not FIND one, not that you have none"),
+    "advice must not assert an absence the probe never observed",
+  );
+  assert.ok(line!.includes("Amazon SES"), "must name the provider that cannot be probed by name");
 });
