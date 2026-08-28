@@ -1,0 +1,84 @@
+# CI for radmail-mcp. This repo had NONE until 2026-08-28.
+#
+# 🔑 WHY THIS FILE EXISTS. Without a workflow, GitHub reports
+# `mergeable_state: "clean"` on every PR — and `clean` means only "no merge
+# conflicts". It reads as green. Nothing was running the 155 tests, the
+# typecheck, the tool contract or the manifest check, so a PR could be merged
+# with any of them broken and the API would say the same word it says today.
+#
+# That is the class this whole product is built around: the success value and
+# the nothing-happened value rendering identically.
+#
+# ⚖️ THIS WORKFLOW ALONE DOES NOT MAKE THE CHECK BINDING. A workflow reports;
+# BRANCH PROTECTION enforces. Until `test` is marked a required status check on
+# `main` in the repo settings, a red run can still be merged past — the readout
+# just stops lying about whether anything ran. Making it required is a repo-
+# admin action and is deliberately left to a human.
+#
+# 🪤 The gates are run as SEPARATE STEPS, not chained with `&&`. A chain stops
+# at the first failure and the run's step list then shows the later gates as
+# "skipped", which reads as "not applicable" rather than "never evaluated".
+# Separate steps name exactly which gate failed in the job summary — the thing
+# you actually want at 2am. `contract` and `manifest` also carry
+# `if: ${{ !cancelled() }}` so a typecheck failure does not hide a second,
+# unrelated failure that would otherwise cost another whole cycle to find.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: typecheck + contract + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # package.json declares engines.node >= 20. Pin the major here rather
+          # than tracking `latest`: a Node bump that breaks the build should be
+          # a deliberate edit to this line, not a surprise on an unrelated PR.
+          node-version: 20
+          cache: npm
+
+      # `npm ci` and not `npm install` — it installs exactly the lockfile and
+      # fails if package.json and package-lock.json disagree, which is itself a
+      # check worth having.
+      - run: npm ci
+
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: tool contract
+        if: ${{ !cancelled() }}
+        run: npm run contract
+
+      - name: tool manifest
+        if: ${{ !cancelled() }}
+        run: npm run manifest:check
+
+      - name: tests
+        if: ${{ !cancelled() }}
+        run: npm test
+
+      # The published artifact is what an evaluator actually runs, and this repo
+      # has a live defect of exactly that shape: `radmail-mcp@0.5.0` on npm still
+      # self-reports `serverInfo.version: "0.4.0"`, because the fix landed in
+      # `src/` and was never released. Source and package.json agreeing is
+      # already pinned by test/manifest.test.ts; building here proves the thing
+      # that gets published still compiles from a clean checkout.
+      - name: build
+        if: ${{ !cancelled() }}
+        run: npm run build
