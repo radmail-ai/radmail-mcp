@@ -61,10 +61,6 @@ jobs:
       - name: typecheck
         run: npm run typecheck
 
-      - name: tool contract
-        if: ${{ !cancelled() }}
-        run: npm run contract
-
       - name: tool manifest
         if: ${{ !cancelled() }}
         run: npm run manifest:check
@@ -73,6 +69,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: npm test
 
+      # 🪤 BUILD BEFORE CONTRACT, AND THE FIRST VERSION OF THIS FILE HAD IT THE
+      # OTHER WAY ROUND. `check-tool-contract.mjs` imports `dist/src/tools.js` to
+      # confirm the server registers every canonical tool name. `dist/` is
+      # gitignored, so on a clean checkout it does not exist — the gate passed on
+      # my machine, where dist was already built, and failed on the first CI run
+      # with `could not import dist/src/tools.js`. A green local run is not a
+      # green CI, and the difference was a directory I had and the runner didn't.
+      #
       # The published artifact is what an evaluator actually runs, and this repo
       # has a live defect of exactly that shape: `radmail-mcp@0.5.0` on npm still
       # self-reports `serverInfo.version: "0.4.0"`, because the fix landed in
@@ -82,3 +86,21 @@ jobs:
       - name: build
         if: ${{ !cancelled() }}
         run: npm run build
+
+      # ⚖️ ON A PR, THE CONTRACT IS CHECKED WITHOUT THE NETWORK.
+      # Step 4 of this gate calls the LIVE hosted sandbox at radmail.ai. That is
+      # a genuinely valuable check — docs drifting from the deployed server is
+      # how an agent hits tool-not-found — but it is a fact about a DEPLOYMENT,
+      # not about the diff under review. Left on, any radmail.ai blip turns every
+      # open PR red for a reason none of their authors can fix, and a check that
+      # fails for unrelated reasons is one people learn to merge past. That
+      # single habit would cost more than this whole workflow buys.
+      #
+      # So: hermetic on pull_request, full on push to main, where a failure means
+      # "the deployed sandbox no longer matches the docs" and is actionable by
+      # whoever just landed something.
+      - name: tool contract
+        if: ${{ !cancelled() }}
+        env:
+          SKIP_LIVE: ${{ github.event_name == 'pull_request' && '1' || '' }}
+        run: npm run contract
