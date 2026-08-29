@@ -6,3 +6,12 @@ dist/
 .env
 .env.*
 data/
+
+# 🩸 Salvage and scratch left in the working tree, 2026-08-28.
+# `.git-BROKEN-2026-08-04/` is a rescued git directory — hundreds of loose
+# objects, its own refs, and a `config`. A `git add -A` during the 0.5.1 release
+# swept the whole thing into a commit and pushed it before it was caught.
+# Untracked-but-present files are invisible in a diff review and land in the
+# next `-A`, so they are ignored here rather than trusted to be noticed again.
+.git-BROKEN-*/
+*.prototype-unported
