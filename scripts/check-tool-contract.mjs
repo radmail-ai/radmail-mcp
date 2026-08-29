@@ -37,8 +37,25 @@ const CANONICAL = [
 const PACKAGE_CANONICAL = ["read_email", "check_send_domain"];
 
 const fail = [];
+// ── 🔑 "I COULD NOT LOOK" IS NOT "I LOOKED AND IT DIVERGED" ─────────────────
+// These were the same list until 2026-08-28. A missing `dist/` — the ordinary
+// state of a fresh checkout — was counted among the CONTRACT BROKEN
+// divergences, so the output said the published surface had drifted when the
+// truth was that nothing had been built yet. The remedy text was right and the
+// heading above it was wrong, which is the worse half to get wrong.
+//
+// Exit codes now follow the fleet contract:
+//   0 = looked, and everything agrees
+//   1 = looked, and something genuinely diverged
+//   2 = could not look (no dist, sandbox unreachable)
+//
+// 1 outranks 2 when both happen, for the same reason `false` outranks `null` in
+// migration-drift: both are bad, only one is actionable, and the caller should
+// be told the thing it can act on.
+const cannotVerify = [];
 const ok = (m) => console.log(`  ✓ ${m}`);
 const bad = (m) => { fail.push(m); console.log(`  ✗ ${m}`); };
+const blind = (m) => { cannotVerify.push(m); console.log(`  ⚠️  ${m}`); };
 
 // 1. mcp.json advertises every canonical name
 const mcpJson = JSON.parse(readFileSync(join(ROOT, "public/.well-known/mcp.json"), "utf8"));
@@ -59,7 +76,38 @@ try {
   registered = new Set((mod.TOOL_DEFS || []).map((d) => d.name));
   for (const t of [...CANONICAL, ...PACKAGE_CANONICAL]) registered.has(t) ? ok(t) : bad(`server does not register canonical tool "${t}"`);
 } catch (e) {
-  bad(`could not import dist/src/tools.js (run \`npm run build\` first): ${e.message}`);
+  blind(`could not import dist/src/tools.js — nothing was checked here (run \`npm run build\` first): ${e.message}`);
+}
+
+// 3b. THE BUILT ARTIFACT IS THE THING USERS RUN, AND IT WAS NEVER CHECKED.
+//
+// 🩸 Measured 2026-08-28 against the live registry: the published
+// `radmail-mcp@0.5.0` tarball carries `package.json` at 0.5.0 and
+// `dist/src/server-info.js` at **0.4.0**. So the server announced itself as a
+// version two minors stale, for 16 days, to every agent that connected.
+//
+// 🔑 A test WAS pinning the version — test/manifest.test.ts asserts
+// SERVER_INFO.version === package.json === public/.well-known/mcp.json — and it
+// passed the entire time. It reads the SOURCE. `npm publish` ships `dist/`.
+// A check can be perfectly rigorous about the wrong proposition.
+//
+// This closes that gap at the one place that already requires a real build.
+console.log("built artifact is fresh (dist vs package.json):");
+try {
+  const pkgVersion = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
+  const info = await import(join(ROOT, "dist/src/server-info.js"));
+  const built = info.SERVER_INFO?.version;
+  if (built === pkgVersion) {
+    ok(`dist/src/server-info.js reports ${built}, matching package.json`);
+  } else {
+    bad(
+      `dist/src/server-info.js reports "${built}" but package.json is "${pkgVersion}" — ` +
+        `dist is STALE. Publishing now would ship a server that misreports its own version, ` +
+        `which is exactly what shipped as 0.5.0. Run \`npm run build\`.`,
+    );
+  }
+} catch (e) {
+  blind(`could not import dist/src/server-info.js — freshness unchecked: ${e.message}`);
 }
 
 // 4. the LIVE hosted sandbox exposes every canonical name
@@ -80,13 +128,32 @@ if (process.env.SKIP_LIVE) {
     for (const t of CANONICAL) live.has(t) ? ok(t) : bad(`live hosted sandbox does NOT expose canonical tool "${t}"`);
     console.log(`  (package-only tools not required live: ${PACKAGE_CANONICAL.join(", ")} — connected mode is key-gated, the hosted sandbox stays key-less)`);
   } catch (e) {
-    bad(`could not reach/parse live hosted sandbox: ${e.message}`);
+    // Same distinction: an unreachable sandbox is a fact about the network or
+    // the deployment, not evidence that the tool list diverged.
+    blind(`could not reach/parse live hosted sandbox — the live leg was NOT checked: ${e.message}`);
   }
 }
 
 console.log("");
 if (fail.length) {
-  console.error(`CONTRACT BROKEN — ${fail.length} divergence(s). An agent following our docs would hit tool-not-found.`);
+  // ⚠️ Deliberately no longer says "an agent would hit tool-not-found" as the
+  // blanket reason. That is true of a missing TOOL and false of a stale dist
+  // version, and a summary line that misdescribes half its own cases teaches
+  // people to skim it.
+  console.error(`CONTRACT BROKEN — ${fail.length} divergence(s) between what we publish and what we ship:`);
+  for (const f of fail) console.error(`  ✗ ${f}`);
+  if (cannotVerify.length) {
+    console.error("");
+    console.error(`…and ${cannotVerify.length} thing(s) could not be checked at all (listed below). Fix the divergence first.`);
+    for (const c of cannotVerify) console.error(`  ⚠️  ${c}`);
+  }
   process.exit(1);
 }
-console.log("CONTRACT OK — advertised = registered = live for all canonical tools.");
+if (cannotVerify.length) {
+  console.error("");
+  console.error(`CANNOT VERIFY — ${cannotVerify.length} check(s) could not run. This is NOT a passing contract,`);
+  console.error(`and it is NOT a divergence either. Nothing was found wrong because nothing was looked at:`);
+  for (const c of cannotVerify) console.error(`  ⚠️  ${c}`);
+  process.exit(2);
+}
+console.log("CONTRACT OK — advertised = registered = live for all canonical tools, and dist matches package.json.");
