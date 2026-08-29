@@ -21,6 +21,7 @@
   "scripts": {
     "prebuild": "npm run manifest:check",
     "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build && npm test && SKIP_LIVE=1 npm run contract",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "RADMAIL_TELEMETRY=off node --test --import tsx test/firewall.test.ts test/taint.test.ts test/connected.test.ts test/demand-sink.test.ts test/send-domain.test.ts test/manifest.test.ts test/api-mcp.test.ts src/learning.test.ts",
     "contract": "node scripts/check-tool-contract.mjs",
