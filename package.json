@@ -27,7 +27,8 @@
     "contract": "node scripts/check-tool-contract.mjs",
     "manifest:check": "RADMAIL_TELEMETRY=off node --import tsx scripts/check-tool-manifest.ts",
     "manifest:regen": "RADMAIL_TELEMETRY=off node --import tsx scripts/regen-tool-manifest.ts",
-    "start": "node dist/src/index.js"
+    "start": "node dist/src/index.js",
+    "pretest": "node scripts/check-every-test-runs.mjs"
   },
   "keywords": [
     "mcp",
