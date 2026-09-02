@@ -234,7 +234,13 @@ export function inboxPulseTool(args: {
     provenance: provenanceBlock(["rightNow[].priority", "rightNow[].whySurfaced", "rightNow[].hardStop", "openCommitments[].commitment", "hardStops[].hardStop"]),
     engineMode: ENGINE_MODE,
     tenant: tenantBlock(tenant, autoProvisioned),
-    note: "One pulse: ranked Right Now lane + open commitments + hard-stops. Discharge a commitment with `draft_followup`; hard-stops are human-only forever.",
+    // 🩸 THIS SAID `draft_followup` UNTIL 2026-09-02 — a tool that has never
+    // existed on this server. It is the note returned by the batch call an
+    // agent is told to start with, so the wrong name reached callers on the
+    // most-used path. Third instance of the class: SERVER_INSTRUCTIONS said
+    // `inbox_pulse` (#9), agent-safety.json said `draft_followup` (#9), and
+    // this runtime string said it too. Now gated.
+    note: "One pulse: ranked Right Now lane + open commitments + hard-stops. Discharge a commitment with `draft_reply`; hard-stops are human-only forever.",
   });
 }
 
