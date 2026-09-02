@@ -23,7 +23,7 @@
   ],
   "permanentHumanOnlyActionTypes": ["payment", "decision", "contact_third_party", "send_deliverable"],
   "autoSendableActionTypes": ["follow_up"],
-  "humanReviewPath": "draft_followup -> human review -> human sends",
+  "humanReviewPath": "draft_reply -> human review -> human sends",
   "failClosed": true,
   "failClosedRule": "if any risk signal cannot be evaluated, RadMail refuses to auto-send.",
   "taintEnvelope": {
