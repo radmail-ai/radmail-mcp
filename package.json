@@ -2,7 +2,7 @@
   "name": "radmail-mcp",
   "version": "0.5.1",
   "private": false,
-  "description": "RadMail MCP server — email operating system for agents: two-axis triage (importance x urgency), a 'Right Now' lane, commitment follow-through, reviewable drafts, and a machine-verifiable BEC hard-stop (money / changed-banking / first-contact / decision / injection = human-only forever). Zero-auth in-memory sandbox, plus read-only CONNECTED mode: set RADMAIL_API_KEY and `search`/`read_email`/`list_right_now`/`list_commitments` work on your real RadMail inbox.",
+  "description": "RadMail MCP server \u2014 email operating system for agents: two-axis triage (importance x urgency), a 'Right Now' lane, commitment follow-through, reviewable drafts, and a machine-verifiable BEC hard-stop (money / changed-banking / first-contact / decision / injection = human-only forever). Zero-auth in-memory sandbox, plus read-only CONNECTED mode: set RADMAIL_API_KEY and `search`/`read_email`/`list_right_now`/`list_commitments` work on your real RadMail inbox.",
   "license": "MIT",
   "author": "RadMail (https://radmail.ai)",
   "type": "module",
@@ -54,5 +54,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/radmail-ai/radmail-mcp"
+  },
+  "overrides": {
+    "fast-uri": "^3.1.6",
+    "qs": "^6.16.0"
   }
 }
