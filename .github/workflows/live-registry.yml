@@ -22,6 +22,13 @@ name: live-registry
 on:
   push:
     branches: [main]
+  # 🪤 GITHUB DISABLES SCHEDULED WORKFLOWS IN A PUBLIC REPO AFTER 60 DAYS WITH NO
+  # REPOSITORY ACTIVITY. That is exactly the failure this job exists to catch: main
+  # ahead of the registry and nobody touching the repo. So the daily run goes quiet
+  # at the moment it matters most, and it goes quiet with no red: a disabled
+  # schedule produces no run at all. If the Actions tab shows this workflow
+  # disabled, re-enable it; `workflow_dispatch` below runs it by hand. The push
+  # trigger still fires whenever anything lands on main.
   schedule:
     - cron: "17 16 * * *"
   workflow_dispatch:

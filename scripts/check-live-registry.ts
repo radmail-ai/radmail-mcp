@@ -19,6 +19,23 @@
 // and it passes at 0.5.1 today. This gate asks the only party that knows: the
 // registries themselves.
 //
+// 🩸 AND A MATCHING NUMBER IS NOT MATCHING CODE (review, 2026-09-13). The first
+// version of this gate compared version strings, so main 0.5.1 plus six unbumped
+// PRs against an npm 0.5.1 read PUBLISHED-CURRENT — the same blindness one level
+// up. npm records the commit a version was packed from (`versions[v].gitHead`);
+// at an equal version the gate now counts commits on main since that commit that
+// touch a PUBLISHED path (package.json `files` minus the gitignored build dir,
+// plus package.json itself). Any such commit is BEHIND. No gitHead, a commit this
+// clone lacks, or no git history is CANNOT-VERIFY — never current.
+// ⚠️ NAMED LIMIT: gitHead is HEAD at pack time. A publish from a DIRTY tree (the
+// stale-dist defect of #7) records a clean-looking sha; nothing on the registry
+// side can see that.
+//
+// 🩸 AND A DELETED REGISTRY RECORD IS NOT A SERVED ONE. The MCP registry's
+// official metadata carries `status` and `isLatest`; the first version read only
+// `isLatest === false`, so {status:"deleted"} and a record with no metadata at all
+// both passed. Now status must be "active" AND isLatest must be present and true.
+//
 // ⚖️ THREE STATES PER CHANNEL, NEVER COLLAPSED:
 //   PUBLISHED-CURRENT  live version == main
 //   BEHIND             main is ahead of live — says by how much and since when
@@ -38,7 +55,7 @@
 //       64 usage
 
 import { readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,6 +67,10 @@ export interface LiveRead {
   ok: boolean;
   version?: string;
   publishedAt?: string;
+  /** npm only: the commit the served version was packed from. */
+  gitHead?: string;
+  /** mcp-registry only: the npm package version the record points installers at. */
+  packageVersion?: string;
   /** Why it could not be read. Present iff ok === false. */
   error?: string;
 }
@@ -132,7 +153,11 @@ export async function readNpm(fetchImpl: FetchLike, pkgName: string, timeoutMs =
   if (typeof latest !== "string" || !parseSemver(latest)) {
     return { channel: "npm", url, ok: false, error: `no readable dist-tags.latest (${JSON.stringify(latest)})` };
   }
-  return { channel: "npm", url, ok: true, version: latest, publishedAt: json?.time?.[latest] };
+  const gitHead = json?.versions?.[latest]?.gitHead;
+  return {
+    channel: "npm", url, ok: true, version: latest, publishedAt: json?.time?.[latest],
+    ...(typeof gitHead === "string" && gitHead.length > 0 ? { gitHead } : {}),
+  };
 }
 
 export async function readMcpRegistry(fetchImpl: FetchLike, serverName: string, timeoutMs = 10_000): Promise<LiveRead> {
@@ -145,21 +170,43 @@ export async function readMcpRegistry(fetchImpl: FetchLike, serverName: string, 
     return { channel: "mcp-registry", url, ok: false, error: `no readable server.version (${JSON.stringify(s?.version)})` };
   }
   const meta = json?._meta?.["io.modelcontextprotocol.registry/official"];
-  if (meta && meta.isLatest === false) {
-    return { channel: "mcp-registry", url, ok: false, error: `the "latest" endpoint returned ${s.version} marked isLatest:false` };
+  if (!meta || typeof meta !== "object") {
+    return { channel: "mcp-registry", url, ok: false, error: `record for ${s.version} carries no official registry metadata — cannot tell whether it is served` };
   }
-  return { channel: "mcp-registry", url, ok: true, version: s.version, publishedAt: meta?.publishedAt };
+  if (meta.status !== "active") {
+    return { channel: "mcp-registry", url, ok: false, error: `record for ${s.version} has status ${JSON.stringify(meta.status)}, not "active"` };
+  }
+  if (meta.isLatest !== true) {
+    return { channel: "mcp-registry", url, ok: false, error: `record for ${s.version} has isLatest ${JSON.stringify(meta.isLatest)}, not true` };
+  }
+  const npmPkg = Array.isArray(s.packages) ? s.packages.find((p: any) => p?.registryType === "npm") : undefined;
+  return {
+    channel: "mcp-registry", url, ok: true, version: s.version, publishedAt: meta.publishedAt,
+    ...(typeof npmPkg?.version === "string" ? { packageVersion: npmPkg.version } : {}),
+  };
 }
 
 // ── classification (pure) ────────────────────────────────────────────────────
 export interface AheadSince { sha: string; date: string; commits: number }
 
-export function classify(mainVersion: string, read: LiveRead, since?: AheadSince | null, now = new Date()): ChannelVerdict {
+export type SourceGap =
+  | { kind: "ancestor"; commits: { sha: string; date: string; subject: string }[] }
+  | { kind: "not-ancestor" }
+  | { kind: "unknown"; why: string };
+
+export interface ClassifyOptions {
+  /** Commits on main since `gitHead` that touch published paths. Absent = no git history = CANNOT-VERIFY at an equal version. */
+  sourceGap?: (gitHead: string) => SourceGap;
+}
+
+export function classify(
+  mainVersion: string, read: LiveRead, since?: AheadSince | null, now = new Date(), opts: ClassifyOptions = {},
+): ChannelVerdict {
   if (!read.ok || !read.version) {
     return { ...read, state: "CANNOT-VERIFY", detail: `could not read the live version — ${read.error ?? "no version"}. This is NOT "in sync".` };
   }
   const c = compareSemver(mainVersion, read.version);
-  if (c === 0) return { ...read, state: "PUBLISHED-CURRENT", detail: `live ${read.version} == main ${mainVersion}` };
+  if (c === 0) return classifyEqualVersion(mainVersion, read, opts);
   if (c < 0) {
     return { ...read, state: "LIVE-AHEAD", detail: `live ${read.version} is AHEAD of main ${mainVersion} — something was published that main does not carry` };
   }
@@ -171,6 +218,88 @@ export function classify(mainVersion: string, read: LiveRead, since?: AheadSince
   if (since) parts.push(`main moved past it at ${since.sha.slice(0, 7)} on ${since.date.slice(0, 10)}, ${since.commits} commit(s) on main from there to HEAD inclusive`);
   else parts.push("when main moved past it: unknown (no git history here)");
   return { ...read, state: "BEHIND", detail: parts.join("; ") };
+}
+
+const cannot = (read: LiveRead, why: string): ChannelVerdict =>
+  ({ ...read, state: "CANNOT-VERIFY", detail: `live ${read.version} == main by NUMBER, but ${why}. This is NOT "in sync".` });
+
+/** Equal version strings prove nothing about the code. Each channel must tie the number to a build. */
+function classifyEqualVersion(mainVersion: string, read: LiveRead, opts: ClassifyOptions): ChannelVerdict {
+  if (read.channel === "mcp-registry") {
+    if (read.packageVersion === undefined) return cannot(read, "the record carries no npm package, so it cannot be tied to a build");
+    if (!parseSemver(read.packageVersion)) return cannot(read, `its npm package version ${JSON.stringify(read.packageVersion)} is unreadable`);
+    const p = compareSemver(mainVersion, read.packageVersion);
+    if (p > 0) return { ...read, state: "BEHIND", detail: `record says ${read.version} but points installers at npm ${read.packageVersion} — main is ${mainVersion}` };
+    if (p < 0) return { ...read, state: "LIVE-AHEAD", detail: `record points installers at npm ${read.packageVersion}, ahead of main ${mainVersion}` };
+    return { ...read, state: "PUBLISHED-CURRENT", detail: `live ${read.version} (npm package ${read.packageVersion}) == main; code freshness is judged on the npm channel` };
+  }
+  if (!read.gitHead) return cannot(read, "npm records no gitHead for it, so the served code cannot be tied to a commit");
+  if (!opts.sourceGap) return cannot(read, "no git history is available to compare its gitHead against main");
+  const g = opts.sourceGap(read.gitHead);
+  const sha = read.gitHead.slice(0, 7);
+  if (g.kind === "unknown") return cannot(read, `its gitHead ${sha} could not be compared (${g.why})`);
+  if (g.kind === "not-ancestor") {
+    return { ...read, state: "LIVE-AHEAD", detail: `live ${read.version} was packed from ${sha}, which main does not contain — published from code main does not carry` };
+  }
+  if (g.commits.length > 0) {
+    const oldest = g.commits[g.commits.length - 1]!;
+    return {
+      ...read, state: "BEHIND",
+      detail: `same version number ${mainVersion}, but main has ${g.commits.length} commit(s) touching published paths since the served build (${sha}); oldest unreleased ${oldest.sha.slice(0, 7)} on ${oldest.date.slice(0, 10)} — that code reaches nobody until a version bump is published`,
+    };
+  }
+  return { ...read, state: "PUBLISHED-CURRENT", detail: `live ${read.version} == main, packed from ${sha} with 0 commits touching published paths since (gitHead is HEAD at pack time; a dirty pack tree is not detectable)` };
+}
+
+const SHA = /^[0-9a-f]{7,40}$/;
+
+/** Published source paths: package.json `files` minus gitignored build output, plus package.json itself. */
+export function publishedPaths(pkg: { files?: unknown }): string[] {
+  const files = Array.isArray(pkg.files) ? pkg.files.filter((x): x is string => typeof x === "string") : [];
+  const out = files.filter((p) => p !== "dist" && !p.startsWith("dist/"));
+  return [...new Set([...out, "package.json"])];
+}
+
+export function sourceGapFromGit(root: string, gitHead: string, paths: string[]): SourceGap {
+  if (!SHA.test(gitHead)) return { kind: "unknown", why: `gitHead ${JSON.stringify(gitHead.slice(0, 40))} is not a commit sha` };
+  const run = (args: string[]) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
+  const shallow = run(["rev-parse", "--is-shallow-repository"]);
+  if (shallow.status !== 0) return { kind: "unknown", why: "not a git repository" };
+  if (shallow.stdout.trim() === "true") return { kind: "unknown", why: "shallow clone — history is incomplete" };
+  if (run(["cat-file", "-e", `${gitHead}^{commit}`]).status !== 0) return { kind: "unknown", why: "commit not in this clone (fetch, then re-run)" };
+  // merge-base --is-ancestor: 0 yes · 1 no · anything else is an error, NOT a "no".
+  const anc = run(["merge-base", "--is-ancestor", gitHead, "HEAD"]);
+  if (anc.status === 1) return { kind: "not-ancestor" };
+  if (anc.status !== 0) return { kind: "unknown", why: `merge-base failed (${anc.status})` };
+  const log = run(["log", "--format=%H%x09%cI%x09%s", `${gitHead}..HEAD`, "--", ...paths]);
+  if (log.status !== 0) return { kind: "unknown", why: "git log failed" };
+  const commits = log.stdout.split("\n").filter(Boolean).map((l) => {
+    const [sha, date, ...rest] = l.split("\t");
+    return { sha: sha!, date: date!, subject: rest.join("\t") };
+  });
+  return { kind: "ancestor", commits };
+}
+
+export interface LocalManifest {
+  packageJsonVersion: string;
+  serverJsonVersion: string | null;
+  serverJsonPackageVersion: string | null;
+  mismatches: string[];
+}
+
+/** What an MCP-registry publish from this tree would send: top-level version AND the npm package entry. */
+export function readLocalManifest(root: string, packageJsonVersion: string, pkgName: string): LocalManifest {
+  let sj: any;
+  try { sj = JSON.parse(readFileSync(join(root, "server.json"), "utf8")); } catch {
+    return { packageJsonVersion, serverJsonVersion: null, serverJsonPackageVersion: null, mismatches: ["server.json unreadable — cannot say what an MCP-registry publish from this tree would send"] };
+  }
+  const top = typeof sj?.version === "string" ? sj.version : null;
+  const npmPkg = Array.isArray(sj?.packages) ? sj.packages.find((p: any) => p?.registryType === "npm" && p?.identifier === pkgName) : undefined;
+  const pkgV = typeof npmPkg?.version === "string" ? npmPkg.version : null;
+  const mismatches: string[] = [];
+  if (top !== packageJsonVersion) mismatches.push(`server.json version is ${JSON.stringify(top)}, package.json is ${packageJsonVersion}`);
+  if (pkgV !== packageJsonVersion) mismatches.push(`server.json packages[npm ${pkgName}].version is ${JSON.stringify(pkgV)}, package.json is ${packageJsonVersion}`);
+  return { packageJsonVersion, serverJsonVersion: top, serverJsonPackageVersion: pkgV, mismatches };
 }
 
 export function exitCodeFor(verdicts: ChannelVerdict[]): 0 | 1 | 2 {
@@ -217,7 +346,7 @@ async function main() {
   }
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) { console.error("  🛑 --timeout-ms must be a positive number"); process.exit(64); }
 
-  let pkg: { name?: string; version?: string; mcpName?: string };
+  let pkg: { name?: string; version?: string; mcpName?: string; files?: unknown };
   try { pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")); } catch {
     console.error("\n[check-live-registry] ⚪️ CANNOT-VERIFY — package.json unreadable.\n"); process.exit(2);
   }
@@ -228,22 +357,24 @@ async function main() {
 
   const f = fetch as unknown as FetchLike;
   const reads = await Promise.all([readNpm(f, pkg.name, timeoutMs), readMcpRegistry(f, pkg.mcpName, timeoutMs)]);
-  const verdicts = reads.map((r) => classify(pkg.version!, r, r.ok && r.version ? aheadSince(ROOT, r.version) : null));
+  const paths = publishedPaths(pkg);
+  const verdicts = reads.map((r) =>
+    classify(pkg.version!, r, r.ok && r.version ? aheadSince(ROOT, r.version) : null, new Date(), {
+      sourceGap: (h) => sourceGapFromGit(ROOT, h, paths),
+    }));
 
   // The manifest that `mcp-publisher publish` would send. If it lags package.json,
   // publishing to the MCP registry from this tree re-publishes the OLD version.
-  let serverJsonVersion: string | undefined;
-  try { serverJsonVersion = JSON.parse(readFileSync(join(ROOT, "server.json"), "utf8")).version; } catch { /* reported below */ }
+  const localManifest = readLocalManifest(ROOT, pkg.version, pkg.name);
   const code = exitCodeFor(verdicts);
 
   if (json) {
-    console.log(JSON.stringify({ mainVersion: pkg.version, serverJsonVersion: serverJsonVersion ?? null, verdicts, exit: code }, null, 2));
+    console.log(JSON.stringify({ mainVersion: pkg.version, publishedPaths: paths, localManifest, verdicts, exit: code }, null, 2));
   } else {
     const icon: Record<ChannelState, string> = { "PUBLISHED-CURRENT": "✅", BEHIND: "🔴", "LIVE-AHEAD": "🟠", "CANNOT-VERIFY": "⚪️" };
     console.log(`\n[check-live-registry] main (package.json) = ${pkg.version}`);
     for (const v of verdicts) console.log(`  ${icon[v.state]} ${v.channel.padEnd(12)} ${v.state.padEnd(17)} ${v.detail}\n     read from ${v.url}`);
-    if (serverJsonVersion === undefined) console.log("  ⚪️ server.json unreadable — cannot say what an MCP-registry publish from this tree would send");
-    else if (serverJsonVersion !== pkg.version) console.log(`  🟠 server.json says ${serverJsonVersion}, package.json says ${pkg.version} — an MCP-registry publish from this tree would re-send ${serverJsonVersion}`);
+    for (const m of localManifest.mismatches) console.log(`  🟠 local manifest: ${m} — an MCP-registry publish from this tree would send the wrong version`);
     const summary = code === 0 ? "PUBLISHED-CURRENT on every channel" : code === 1 ? "main is NOT what the public channels serve" : "COULD NOT VERIFY — this is not a pass";
     console.log(`  ⇒ exit ${code}: ${summary}. This gate publishes nothing.\n`);
   }
