@@ -1,0 +1,48 @@
+# Does what main says we ship match what npm and the MCP registry actually serve?
+#
+# 🩸 2026-09-13: main was 0.5.1 for 15 days (6 merged PRs) while both public
+# channels served 0.5.0 — a build naming tools that never existed, inside the
+# safety contract's human-review sentence. ci.yml could not see it: every check
+# there compares two halves that live in this tree. See
+# scripts/check-live-registry.ts for the full account.
+#
+# ⚖️ A SEPARATE WORKFLOW, NOT A STEP IN ci.yml, and NEVER ON pull_request.
+# Whether the registry is current is a fact about DISTRIBUTION, not about any
+# diff under review, and ci.yml's `test` job is the one a PR is judged by. This
+# job goes red on main (and daily) until someone publishes — a visible, named
+# red that does not block unrelated work.
+#
+# Exit 1 = BEHIND/LIVE-AHEAD · exit 2 = CANNOT-VERIFY (also red: an unreachable
+# registry is not "in sync").
+#
+# 🛑 This workflow publishes NOTHING and holds no npm or registry credential.
+
+name: live-registry
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-registry:
+    name: main vs live npm + MCP registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the gate can say WHEN main moved past the live version.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: compare main against the live registries
+        run: npm run release:live
