@@ -4,6 +4,7 @@
 // locally. The Vercel deployment uses api/mcp.ts (streamable-HTTP) instead.
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { startupBanner } from "./lib/mode.js";
 import { createServer } from "./server.js";
 
 async function main(): Promise<void> {
@@ -11,7 +12,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // eslint-disable-next-line no-console
-  console.error("radmail-mcp (sandbox engine) running on stdio");
+  console.error(startupBanner("running on stdio"));
 }
 
 main().catch((err) => {

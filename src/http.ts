@@ -17,6 +17,7 @@
  */
 
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { startupBanner } from "./lib/mode.js";
 import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
@@ -115,5 +116,5 @@ const http = createHttpServer((req, res) => {
 });
 
 http.listen(PORT, () => {
-  process.stderr.write(`radmail-mcp (sandbox engine) listening on http://localhost:${PORT}${MCP_PATH}\n`);
+  process.stderr.write(startupBanner(`listening on http://localhost:${PORT}${MCP_PATH}`) + "\n");
 });

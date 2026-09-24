@@ -11,13 +11,14 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./server.js";
+import { startupBanner } from "./lib/mode.js";
 
 async function main(): Promise<void> {
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // stdout is the JSON-RPC channel — diagnostics must go to stderr.
-  process.stderr.write("radmail-mcp (sandbox engine) ready on stdio\n");
+  process.stderr.write(startupBanner("ready on stdio") + "\n");
 }
 
 main().catch((err) => {
