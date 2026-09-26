@@ -35,8 +35,14 @@ export const HASH_FILE = join(OUT_DIR, "RADMAIL-ENGINE.sha256");
 
 const IMPORT_LINE = /^import\s[\s\S]*?from\s+["'][^"']+["'];?[ \t]*(\/\/.*)?$/gm;
 
-export function buildBundle(readModule = (rel) => readFileSync(join(ROOT, "src", rel), "utf8")) {
-  const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+// `version` is injectable so the installer can rebuild the bundle AS IT WAS AT A
+// TAG (modules and package.json both read from the tag) and prove the tagged
+// engine-dist/ is the bundle that tag's source implies. Defaults are unchanged.
+export function buildBundle(
+  readModule = (rel) => readFileSync(join(ROOT, "src", rel), "utf8"),
+  version = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version,
+) {
+  const pkg = { version };
   const parts = ENGINE_ORDER.map((rel) => {
     const src = readModule(rel);
     const stripped = src.replace(IMPORT_LINE, (m) => `// (bundled — import removed: ${m.replace(/\s+/g, " ").slice(0, 90)})`);
