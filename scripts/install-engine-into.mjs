@@ -195,8 +195,23 @@ export function planInstall(src, repo, { force = false } = {}) {
   const existing = readFileSync(destBundle, "utf8");
   const existingManifest = existsSync(destManifest) ? readFileSync(destManifest, "utf8") : null;
   const actual = bodyHash(existing, src.sentinel);
-  if (actual === src.hash && existingManifest === src.manifestLine) {
+  // 🩸 "same" means the WHOLE FILE, byte for byte. The body hash covers only the
+  // sentinel onward, so a copy with code added ABOVE the sentinel (an extra export
+  // in the header region) hashes identically — and this verdict is what a person
+  // is told to rely on to prove a regulated org's copy is a release.
+  if (existing === src.bundle && existingManifest === src.manifestLine) {
     return { action: "same", destBundle, destManifest, message: "identical bytes — nothing to do" };
+  }
+  // ⚖️ The one honest way to share this body with different bytes: an unedited build
+  // of ANOTHER release, whose header differs only in its version stamp. Anything
+  // else above the sentinel is an edit.
+  const stamp = (v) => `// radmail-mcp ${v} · modules:`;
+  const otherVersion = stampedVersion(existing);
+  const honestOtherRelease = otherVersion !== null && otherVersion !== src.version
+    && src.bundle.includes(stamp(src.version))
+    && existing === src.bundle.replace(stamp(src.version), stamp(otherVersion));
+  if (actual === src.hash && existing !== src.bundle && !honestOtherRelease && !force) {
+    return { action: "refuse", exit: 1, destBundle, destManifest, message: `the existing copy was EDITED IN PLACE outside the hashed body: its body hash matches ${src.hash.slice(0, 16)}…, but the file is not byte-identical to the release (the difference is above the sentinel). A body-hash match is not proof. Diff it against the tag, upstream the edit, or pass --force to discard it.` };
   }
   // 🛑 An edited copy is somebody's change. Overwriting it silently destroys it.
   const claimed = claimedHash(existing);

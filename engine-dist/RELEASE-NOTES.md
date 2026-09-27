@@ -79,5 +79,23 @@ without `--apply`, and VRG is report-only:
 node scripts/install-engine-into.mjs ~/dev/vrg-app      # expect: "identical bytes — nothing to do"
 ```
 
-If it reports anything other than identical bytes, **do not `--apply` into VRG**.
-The fleet's D4 rule makes VRG report-only, so file the difference instead.
+"Identical bytes" means the **whole vendored file** equals the tag's bundle byte for
+byte, and the hash file equals the tag's hash line. The body hash is not enough on
+its own: it covers only the text from the sentinel on, so code added above the
+sentinel (for example an extra export in the header) leaves it unchanged. A copy
+whose body hash matches but whose bytes differ is REFUSED as "EDITED IN PLACE … not
+proof" (exit 1). Installers from before PR #17's review fix reported that case as
+identical, so run the dry run from a checkout that has the fix, which is the tagged
+commit.
+
+For a second check that does not depend on the installer, compare the git blob ids
+from the table above:
+
+```bash
+git -C ~/dev/vrg-app rev-parse origin/main:vendor/radmail-engine.bundle.ts   # expect 3b5f6b05dff0…
+git rev-parse radmail-engine-v0.5.1:engine-dist/radmail-engine.bundle.ts     # expect the same
+```
+
+If it reports anything other than identical bytes, **do not `--apply` into VRG**,
+and do not use `--force`. The fleet's D4 rule makes VRG report-only, so file the
+difference instead.

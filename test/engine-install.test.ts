@@ -169,6 +169,57 @@ test("an existing copy EDITED IN PLACE is refused; --force replaces it", () => {
   rmSync(src, { recursive: true, force: true }); rmSync(dst, { recursive: true, force: true });
 });
 
+// 🩸 Review of #17: the "same" verdict compared only the body hash (sentinel onward)
+// and the hash line, so code added ABOVE the sentinel read as "identical bytes".
+// That verdict is what RELEASE-NOTES tells a person to rely on to prove VRG's copy.
+test("code added ABOVE the sentinel is NOT identical — a body-hash match with different bytes is REFUSED", () => {
+  const src = fixtureRepo();
+  g(src, "tag", "radmail-engine-v0.5.1");
+  const r = resolveSource(src) as any;
+  const i = r.bundle.indexOf(r.sentinel);
+  assert.ok(i > 0, "fixture must have a header above the sentinel");
+  const injected = r.bundle.slice(0, i) + "export const exfil = globalThis.fetch;\n" + r.bundle.slice(i);
+  // the mutation really is invisible to the body hash — otherwise this test proves nothing
+  assert.equal(bodyHash(injected, r.sentinel), r.hash);
+  assert.equal(claimedHash(injected), r.hash);
+  const dst = target();
+  mkdirSync(join(dst, "vendor"));
+  writeFileSync(join(dst, "vendor", "radmail-engine.bundle.ts"), injected);
+  writeFileSync(join(dst, "vendor", "RADMAIL-ENGINE.sha256"), r.manifestLine);
+  const p = planInstall(r, dst);
+  assert.notEqual(p.action, "same");
+  assert.equal(p.action, "refuse");
+  assert.equal((p as any).exit, 1);
+  assert.match(p.message, /EDITED IN PLACE/);
+  assert.match(p.message, /not proof/);
+  // --force is still the deliberate way past it, and it discards the edit
+  assert.equal(planInstall(r, dst, { force: true }).action, "replace");
+  // the honest-other-release allowance (version stamp only) must not launder an injection
+  const newer = buildBundle(realSrc, "0.6.0").contents;
+  const j = newer.indexOf(r.sentinel);
+  writeFileSync(join(dst, "vendor", "radmail-engine.bundle.ts"), newer.slice(0, j) + "export const exfil = globalThis.fetch;\n" + newer.slice(j));
+  const p2 = planInstall(r, dst);
+  assert.equal(p2.action, "refuse");
+  assert.match(p2.message, /not proof/);
+  rmSync(src, { recursive: true, force: true }); rmSync(dst, { recursive: true, force: true });
+});
+
+test("POSITIVE CONTROL for the byte check: an exact copy is 'same'; a copy whose only difference is the hash line is 'replace', not refused", () => {
+  const src = fixtureRepo();
+  g(src, "tag", "radmail-engine-v0.5.1");
+  const r = resolveSource(src) as any;
+  const dst = target();
+  mkdirSync(join(dst, "vendor"));
+  writeFileSync(join(dst, "vendor", "radmail-engine.bundle.ts"), r.bundle);
+  writeFileSync(join(dst, "vendor", "RADMAIL-ENGINE.sha256"), r.manifestLine);
+  assert.equal(planInstall(r, dst).action, "same");
+  writeFileSync(join(dst, "vendor", "RADMAIL-ENGINE.sha256"), r.manifestLine.trimEnd() + "  UNRELEASED:deadbeef\n");
+  const p = planInstall(r, dst);
+  assert.equal(p.action, "replace");
+  assert.match(p.message, /hash line differs/);
+  rmSync(src, { recursive: true, force: true }); rmSync(dst, { recursive: true, force: true });
+});
+
 test("a DOWNGRADE is refused; --force allows it", () => {
   const src = fixtureRepo();
   g(src, "tag", "radmail-engine-v0.5.1");
