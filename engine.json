@@ -1,0 +1,16 @@
+{
+  "$comment": "Engine descriptor (fleet design 2026-09-26 §B1). An installer reads THIS FILE AT A TAG, never from the working tree. Paths are relative to the repo root. test/engine-install.test.ts pins every field against scripts/bundle-engine.mjs so the two cannot drift.",
+  "engine": "radmail",
+  "tagPrefix": "radmail-engine-v",
+  "versionFrom": "package.json",
+  "bundle": "engine-dist/radmail-engine.bundle.ts",
+  "client": null,
+  "data": [],
+  "ui": [],
+  "verifier": null,
+  "manifest": "engine-dist/RADMAIL-ENGINE.sha256",
+  "sentinel": "// ═══ module:",
+  "sources": ["src/engine/types.ts", "src/engine/send-disposition.ts"],
+  "vendorDir": "vendor",
+  "dataClassCeiling": "source"
+}
