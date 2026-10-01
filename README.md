@@ -58,6 +58,16 @@ The safety contract is **machine-verifiable** — fetch it and check it in one c
 curl -s https://radmail.ai/.well-known/agent-safety.json
 ```
 
+**Then don't take its word for it — read the tool list back and look for a send-capable tool.** This is the check the `capability-absent` row above points at, and it needs no key either:
+
+```bash
+curl -s -X POST https://radmail.ai/api/mcp/sandbox \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+Read the names back. There is no `send`, no `send_email`, no `pay`, no `update_banking` — and that absence *is* the enforcement. Observed on the hosted sandbox **2026-09-30: 6 tools** — `triage_inbox`, `list_right_now`, `why_surfaced`, `list_commitments`, `draft_reply`, `search`. That is a dated observation of the **hosted sandbox tier**, not a ceiling: the local stdio package exposes the fuller set in the table above. Re-run the command rather than trusting this line.
+
 ## Connect
 
 **Fastest — zero-auth hosted sandbox** (no install, no key, no signup). Point any MCP client at the streamable-HTTP endpoint:
@@ -87,6 +97,8 @@ curl -s https://radmail.ai/.well-known/agent-safety.json
 ```
 
 > `radmail-mcp` is live on npm — the `npx` line above works as-is. Prefer no install at all? Use the **zero-auth hosted sandbox above**.
+
+> ⚠️ **Honest note on the published version (true as of 2026-09-30).** `npm view radmail-mcp dist-tags` reports `latest: 0.5.0`, but the build inside that tarball announces itself as **`0.4.0`** over MCP — `dist/` was packed before a version bump. This repository's `main` is at `0.5.1` with the root cause fixed (`prepublishOnly` now rebuilds `dist/` before packing); the corrected package is not yet published, because publishing needs an interactive `npm login` only the maintainer can run. Reproduce it yourself: `npm pack radmail-mcp && tar -xzOf radmail-mcp-*.tgz package/dist/src/server-info.js | grep version`. No part of the safety contract depends on the version string — but RadMail publishes this check rather than asking you to assume.
 
 Or from source: `git clone https://github.com/radmail-ai/radmail-mcp && npm i && npm run build && npm start` (stdio). Hosted deploy: Vercel Node serverless function (`api/mcp.ts`; `/` rewrites to the MCP handler).
 
