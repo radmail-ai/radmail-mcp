@@ -404,3 +404,35 @@ test("SCOPE: public/.well-known/mcp.json version + tool list and SERVER_INFO.ver
     "public/.well-known/mcp.json tool list drifted from the live tool surface",
   );
 });
+
+// server.json is the THIRD version declaration in this repo and was the only one
+// nothing asserted against the real tree. check-live-registry.ts DOES detect the
+// drift — but only as an advisory 🟠 line on a gate that already exits 1 for an
+// unrelated reason (npm being behind), and its own unit tests exercise the
+// detector against temp fixtures, never this file. Measured 2026-10-02: package.json
+// and src/server-info.ts both read 0.5.1 while server.json read 0.5.0 — through 14
+// commits on main — so an MCP-registry publish from this tree would have sent the
+// wrong version to the one record every directory mirrors. This pins it where a
+// publish cannot get past it: `test` runs inside `prepublishOnly`.
+test("SCOPE: server.json version + its npm package version match package.json", () => {
+  const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as { version: string };
+  const server = JSON.parse(readFileSync(join(REPO_ROOT, "server.json"), "utf8")) as {
+    description: string;
+    version: string;
+    packages: { registryType: string; identifier: string; version: string }[];
+  };
+  assert.equal(server.version, pkg.version, "server.json version drifted from package.json");
+  const npmPkg = server.packages.find((p) => p.registryType === "npm");
+  assert.ok(npmPkg, "server.json declares no npm package");
+  assert.equal(
+    npmPkg.version,
+    pkg.version,
+    "server.json packages[npm].version drifted from package.json — the registry record would point installers at the wrong npm version",
+  );
+  // The registry schema caps description at 100 chars and rejects the publish above it,
+  // which is a failure a human only sees at publish time. Fail here instead.
+  assert.ok(
+    server.description.length >= 1 && server.description.length <= 100,
+    `server.json description is ${server.description.length} chars; the MCP server schema allows 1-100`,
+  );
+});
