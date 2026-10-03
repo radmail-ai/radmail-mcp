@@ -11,10 +11,12 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./server.js";
+import { sendToolRequested } from "./lib/send.js";
 import { startupBanner } from "./lib/mode.js";
 
 async function main(): Promise<void> {
-  const server = createServer();
+  // RADMAIL_SEND_TOOL=1 turns on the opt-in send_email tool — LOCAL entries only.
+  const server = createServer({ enableSend: sendToolRequested() });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // stdout is the JSON-RPC channel — diagnostics must go to stderr.

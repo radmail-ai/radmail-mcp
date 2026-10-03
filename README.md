@@ -66,7 +66,7 @@ curl -s -X POST https://radmail.ai/api/mcp/sandbox \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-Read the names back. There is no `send`, no `send_email`, no `pay`, no `update_banking` — and that absence *is* the enforcement. Observed on the hosted sandbox **2026-09-30: 6 tools** — `triage_inbox`, `list_right_now`, `why_surfaced`, `list_commitments`, `draft_reply`, `search`. That is a dated observation of the **hosted sandbox tier**, not a ceiling: the local stdio package exposes the fuller set in the table above. Re-run the command rather than trusting this line.
+Read the names back. There is no `send`, no `send_email`, no `pay`, no `update_banking` — and that absence *is* the enforcement. (One exception, and only where an operator chose it: a **local** stdio server started with `RADMAIL_SEND_TOOL=1` also lists `send_email` — see *Opt-in: sending* below. The hosted endpoints never do.) Observed on the hosted sandbox **2026-09-30: 6 tools** — `triage_inbox`, `list_right_now`, `why_surfaced`, `list_commitments`, `draft_reply`, `search`. That is a dated observation of the **hosted sandbox tier**, not a ceiling: the local stdio package exposes the fuller set in the table above. Re-run the command rather than trusting this line.
 
 ## Connect
 
@@ -169,6 +169,35 @@ claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
 ```
 
 > `radmail-mcp` is live on npm, so the `npx` lines above work as-is. Prefer source? Point `command` at `node dist/src/index.js` — connected mode works the same way.
+
+## Opt-in: sending (local stdio only)
+
+Off by default, absent from the hosted endpoints, and present on a local server only when its operator sets **both**:
+
+```bash
+# RADMAIL_API_KEY       the read key (search / read_email / right-now) — never used to send
+# RADMAIL_SEND_TOOL=1   lists send_email on THIS server
+# RADMAIL_SEND_API_KEY  a separate key with the send scope, ideally confined to one mailbox
+claude mcp add radmail \
+  -e RADMAIL_API_KEY=tmk_... \
+  -e RADMAIL_SEND_TOOL=1 \
+  -e RADMAIL_SEND_API_KEY=tmk_... \
+  -- npx -y radmail-mcp
+```
+
+`send_email` hands the email to RadMail's outbound gate (`POST /api/v1/send`) and reports one of three outcomes:
+
+| outcome | what happened |
+|---|---|
+| `sent` | RadMail's gate released it from the owner's connected mailbox. |
+| `held` | Nothing was sent. The owner releases or discards it in the RadMail app at `reviewUrl`. |
+| `refused` | Not sent and not held — bad input, sending switched off, no send key, a suppressed recipient. |
+
+**RadMail decides, not the agent.** It sends at once only when every recipient is on the owner's own team (a domain the workspace marked internal) or an established two-way contact; everything else is held. Money, changed-banking, first-contact, decision and injection content, and regulator / government / court / bank recipients, always hold. **No tool can release a held send** — the response carries a link to the app page, never a token, and the client only ever calls the send path.
+
+⚖️ **Be exact about what this changes.** On a server with sending turned on, the *capability-absent* label above no longer describes sending: the capability exists and is narrowed by configuration (`config-restricted`), and a held send is a person approving a request. The five hard-stopped classes still cannot leave without that person. The safety block on every response says which kind of server you are talking to: a send-enabled server replaces the "never sends mail" sentence with a `sendSurface` statement rather than leaving a false one in place.
+
+The tool's description asks the agent to run its own correspondence review on the exact text before sending to anyone outside the owner's team — RadMail's gate catches machine-written tells and unthreaded replies, but it is not a substitute for a voice review.
 
 ## Telemetry (demand signals — opt-out)
 

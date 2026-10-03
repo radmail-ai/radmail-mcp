@@ -17,13 +17,17 @@ import { dirname, join } from "node:path";
 // IMPORTANT (bootstrap): import SERVER_INSTRUCTIONS from server-info.ts, NOT
 // server.ts — server.ts statically imports src/tool-manifest.ts, and this
 // script must run when that artifact does not exist yet.
-import { TOOL_DEFS } from "../src/tools.js";
-import { SERVER_INSTRUCTIONS } from "../src/server-info.js";
+import { TOOL_DEFS, SEND_TOOL_DEF } from "../src/tools.js";
+import { SERVER_INSTRUCTIONS, SEND_INSTRUCTIONS_ADDENDUM } from "../src/server-info.js";
 import { computeToolManifest, lintToolDescriptions } from "../src/lib/manifest.js";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "tool-manifest.ts");
+const SEND_OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "send-tool-manifest.ts");
 
-const violations = lintToolDescriptions(TOOL_DEFS, SERVER_INSTRUCTIONS);
+const violations = [
+  ...lintToolDescriptions(TOOL_DEFS, SERVER_INSTRUCTIONS),
+  ...lintToolDescriptions([SEND_TOOL_DEF], SEND_INSTRUCTIONS_ADDENDUM),
+];
 if (violations.length > 0) {
   console.error("REFUSING to regenerate: the tool surface fails the anti-injection lint:");
   for (const v of violations) {
@@ -58,3 +62,23 @@ console.log(`  server instructions  ${manifest.serverInstructionsSha256}`);
 for (const t of manifest.tools) console.log(`  ${t.name.padEnd(26)} ${t.sha256}`);
 console.log(`  MANIFEST             ${manifest.manifestSha256}`);
 console.log("Review the diff of src/tool-manifest.ts and commit it with the surface change.");
+
+// ── The opt-in send tool, frozen on its own ────────────────────────────────
+// Kept OUT of the default manifest so a default install's surface (and every
+// hash above) is untouched by its existence. Registered only by
+// createServer({ enableSend: true }), which re-verifies against THIS file.
+const sendManifest = computeToolManifest([SEND_TOOL_DEF], SEND_INSTRUCTIONS_ADDENDUM);
+const sendBanner = `// GENERATED FILE — DO NOT EDIT BY HAND.
+//
+// Frozen manifest of the OPT-IN send_email tool and the instructions addendum
+// a send-enabled server appends. Verified by createServer({ enableSend: true })
+// before the tool is registered; a mismatch refuses to serve. Regenerate with
+//   npm run manifest:regen   — then review + commit this file.
+
+import type { FrozenManifest } from "./lib/manifest.js";
+
+export const SEND_TOOL_MANIFEST: FrozenManifest = `;
+writeFileSync(SEND_OUT, sendBanner + JSON.stringify(sendManifest, null, 2) + ";\n", "utf8");
+console.log(`Wrote ${SEND_OUT}`);
+for (const t of sendManifest.tools) console.log(`  ${t.name.padEnd(26)} ${t.sha256}`);
+console.log(`  SEND MANIFEST        ${sendManifest.manifestSha256}`);

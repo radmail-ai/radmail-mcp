@@ -6,9 +6,11 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { startupBanner } from "./lib/mode.js";
 import { createServer } from "./server.js";
+import { sendToolRequested } from "./lib/send.js";
 
 async function main(): Promise<void> {
-  const server = createServer();
+  // RADMAIL_SEND_TOOL=1 turns on the opt-in send_email tool — LOCAL entries only.
+  const server = createServer({ enableSend: sendToolRequested() });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // eslint-disable-next-line no-console
