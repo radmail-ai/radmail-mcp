@@ -1005,3 +1005,97 @@ export const TOOL_DEFS: ToolDef[] = [
     handler: learningInsightsTool,
   },
 ];
+
+// ─── send_email — OPT-IN, LOCAL ONLY, NOT IN TOOL_DEFS ──────────────────────
+//
+// Deliberately outside TOOL_DEFS: the default published surface (and the
+// hosted HTTP endpoint) has no send capability, and its frozen manifest,
+// instructions and safety block all say so. createServer({ enableSend: true })
+// — which only the stdio entries pass, and only when RADMAIL_SEND_TOOL=1 —
+// registers this one extra tool, frozen in its own manifest
+// (src/send-tool-manifest.ts).
+//
+// 🛑 It has no way to release a held send: no input names a request to act on,
+// and the client (src/lib/send.ts) only ever POSTs to the send path.
+import { getSendConfig, submitSend, type SendOutcome } from "./lib/send.js";
+
+export async function sendEmailTool(args: {
+  from: string;
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  markdown: string;
+  inReplyTo?: string;
+  idempotencyKey?: string;
+  agentId?: string;
+}): Promise<object> {
+  recordCall(args.agentId, "send_email");
+  const cfg = getSendConfig();
+  if (!cfg) {
+    const refused: SendOutcome = {
+      outcome: "refused",
+      httpStatus: null,
+      error: "no_send_key_configured",
+      detail:
+        "This server has no send-scoped RadMail key, so nothing was sent. The operator sets RADMAIL_SEND_API_KEY " +
+        "(a key with the send scope, ideally confined to one mailbox) on this MCP server and restarts it. " +
+        "RADMAIL_API_KEY is the read key and is never used to send.",
+    };
+    return withSafety(refused);
+  }
+  const result = await submitSend(
+    {
+      from: args.from,
+      to: args.to,
+      cc: args.cc,
+      bcc: args.bcc,
+      subject: args.subject,
+      markdown: args.markdown,
+      inReplyTo: args.inReplyTo,
+      idempotencyKey: args.idempotencyKey,
+      requestedBy: args.agentId ? `radmail-mcp send_email (${args.agentId.slice(0, 80)})` : undefined,
+    },
+    cfg,
+  );
+  const note =
+    result.outcome === "sent"
+      ? "Sent by RadMail's gate from the owner's mailbox."
+      : result.outcome === "held"
+        ? "HELD for the owner. Nothing was sent, and no tool can release it — the owner opens reviewUrl in RadMail and releases or discards it. Tell the owner it is waiting."
+        : "Not sent and not held. Read `detail`; do not retry blindly.";
+  return withSafety({ ...result, note });
+}
+
+export const SEND_TOOL_DEF: ToolDef = {
+  name: "send_email",
+  description:
+    "Send an email from the owner's connected mailbox through RadMail's outbound gate. Returns outcome sent | held | refused. " +
+    "RadMail decides, not you: mail to the owner's own team or an established two-way contact may go at once; everything else is HELD " +
+    "for the owner to release in the RadMail app (a held result carries reviewUrl, never a token). This tool cannot release a hold and " +
+    "neither can any other. Money / changed-banking / first-contact / decision / injection content and regulator / government / court / " +
+    "bank recipients always hold. BEFORE using this for any recipient outside the owner's own team, run your correspondence-guard " +
+    "review on the exact text you will send (register, machine-written tells, threading, promises) and send only what it passes. " +
+    "Reply on the real thread: pass inReplyTo for a reply rather than a new message with Re: in the subject. Opt-in: present only on " +
+    "a local server with RADMAIL_SEND_TOOL=1; needs a send-scoped RADMAIL_SEND_API_KEY.",
+  inputSchema: {
+    from: z.string().email().max(254).describe("The owner's connected mailbox address to send as."),
+    to: z.array(z.string().email().max(254)).min(1).max(20).describe("Recipients."),
+    cc: z.array(z.string().email().max(254)).max(20).optional(),
+    bcc: z.array(z.string().email().max(254)).max(20).optional(),
+    subject: z.string().min(1).max(300),
+    markdown: z.string().min(1).max(50_000).describe("The body, in Markdown, exactly as it should be read."),
+    inReplyTo: z
+      .string()
+      .max(500)
+      .optional()
+      .describe("Message-ID of the email being answered. Without it, a Re: subject is held as an unthreaded reply."),
+    idempotencyKey: z
+      .string()
+      .max(200)
+      .optional()
+      .describe("Optional. The same key on a retry returns the first outcome instead of sending twice."),
+    agentId: z.string().max(80).optional().describe("Stable id for YOUR agent (no PII)."),
+  },
+  handler: sendEmailTool,
+};

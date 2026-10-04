@@ -3,11 +3,12 @@
 // Vercel streamable-HTTP handler (api/mcp.ts).
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { TOOL_DEFS } from "./tools.js";
-import { SAFETY_BLOCK } from "./lib/taint.js";
+import { TOOL_DEFS, SEND_TOOL_DEF, type ToolDef } from "./tools.js";
+import { SAFETY_BLOCK, setSendSurfaceActive } from "./lib/taint.js";
 import { assertToolManifest } from "./lib/manifest.js";
 import { TOOL_MANIFEST } from "./tool-manifest.js";
-import { SERVER_INFO, SERVER_INSTRUCTIONS } from "./server-info.js";
+import { SEND_TOOL_MANIFEST } from "./send-tool-manifest.js";
+import { SERVER_INFO, SERVER_INSTRUCTIONS, SEND_INSTRUCTIONS_ADDENDUM } from "./server-info.js";
 
 // Identity + instructions live in server-info.ts (a leaf module with no
 // dependency on the frozen manifest artifact) so manifest:regen can import
@@ -15,7 +16,17 @@ import { SERVER_INFO, SERVER_INSTRUCTIONS } from "./server-info.js";
 // existing consumers.
 export { SERVER_INFO, SERVER_INSTRUCTIONS };
 
-export function createServer(): McpServer {
+export interface CreateServerOptions {
+  /**
+   * Register the opt-in `send_email` tool. ONLY the local stdio entries pass
+   * this, and only when RADMAIL_SEND_TOOL=1. The hosted HTTP entry
+   * (api/mcp.ts, src/http.ts) calls createServer() with no options, so a
+   * shared endpoint can never send as whoever's key is in its environment.
+   */
+  enableSend?: boolean;
+}
+
+export function createServer(opts: CreateServerOptions = {}): McpServer {
   // Anti-poisoning gate (OWASP ASI02/ASI04): recompute the sha256 of every
   // tool's name + description + published input schema and compare against the
   // checked-in frozen manifest (src/tool-manifest.ts). Any divergence — a
@@ -23,8 +34,16 @@ export function createServer(): McpServer {
   // here, BEFORE a single tool is registered: fail closed, serve nothing.
   assertToolManifest(TOOL_DEFS, SERVER_INSTRUCTIONS, TOOL_MANIFEST);
 
+  // The opt-in send tool is frozen in its OWN manifest, so turning it on cannot
+  // smuggle an unblessed description in, and leaving it off changes nothing.
+  const enableSend = opts.enableSend === true;
+  if (enableSend) assertToolManifest([SEND_TOOL_DEF], SEND_INSTRUCTIONS_ADDENDUM, SEND_TOOL_MANIFEST);
+  const defs: ToolDef[] = enableSend ? [...TOOL_DEFS, SEND_TOOL_DEF] : TOOL_DEFS;
+  // Every response's safety block must tell the truth about THIS server.
+  setSendSurfaceActive(enableSend);
+
   const server = new McpServer(SERVER_INFO, {
-    instructions: SERVER_INSTRUCTIONS,
+    instructions: enableSend ? `${SERVER_INSTRUCTIONS} ${SEND_INSTRUCTIONS_ADDENDUM}` : SERVER_INSTRUCTIONS,
     capabilities: { tools: {} },
   });
 
@@ -34,7 +53,7 @@ export function createServer(): McpServer {
   // `annotations` object, an extra registerTool() outside this loop) would
   // publish agent-facing text OUTSIDE the freeze. Don't add them here without
   // extending the manifest to cover them.
-  for (const def of TOOL_DEFS) {
+  for (const def of defs) {
     server.registerTool(
       def.name,
       { description: def.description, inputSchema: def.inputSchema },

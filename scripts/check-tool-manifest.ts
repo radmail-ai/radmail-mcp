@@ -9,13 +9,17 @@
 // Exit 1: mismatch — the error names every divergence and the remedy
 //         (npm run manifest:regen for a deliberate change or converter drift).
 
-import { TOOL_DEFS } from "../src/tools.js";
-import { SERVER_INSTRUCTIONS } from "../src/server-info.js";
+import { TOOL_DEFS, SEND_TOOL_DEF } from "../src/tools.js";
+import { SERVER_INSTRUCTIONS, SEND_INSTRUCTIONS_ADDENDUM } from "../src/server-info.js";
 import { TOOL_MANIFEST } from "../src/tool-manifest.js";
+import { SEND_TOOL_MANIFEST } from "../src/send-tool-manifest.js";
 import { assertToolManifest } from "../src/lib/manifest.js";
 
 try {
   assertToolManifest(TOOL_DEFS, SERVER_INSTRUCTIONS, TOOL_MANIFEST);
+  // The opt-in send tool is frozen separately; check it here too, or a drifted
+  // send_email would build green and fail only when an operator turns it on.
+  assertToolManifest([SEND_TOOL_DEF], SEND_INSTRUCTIONS_ADDENDUM, SEND_TOOL_MANIFEST);
 } catch (err) {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
