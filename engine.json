@@ -1,5 +1,5 @@
 {
-  "$comment": "Engine descriptor (fleet design 2026-09-26 §B1). An installer reads THIS FILE AT A TAG, never from the working tree. Paths are relative to the repo root. test/engine-install.test.ts pins every field against scripts/bundle-engine.mjs so the two cannot drift.",
+  "$comment": "Engine descriptor. An installer reads THIS FILE AT A TAG, never from the working tree. Paths are relative to the repo root. test/engine-install.test.ts pins every field against scripts/bundle-engine.mjs so the two cannot drift.",
   "engine": "radmail",
   "tagPrefix": "radmail-engine-v",
   "versionFrom": "package.json",

@@ -301,9 +301,9 @@ export function analyzeDmarc(txtRecords: string[]): DmarcAnalysis {
  * nothing to fall back on."*
  *
  * Caught on a real domain that is correctly configured:
- *   selector1._domainkey.greenwellness.org
- *     → CNAME selector1-greenwellness-org._domainkey.<tenant>.d-v1.dkim.mail.microsoft.
- *   selector2._domainkey.greenwellness.org  → the matching CNAME
+ *   selector1._domainkey.example.org
+ *     → CNAME selector1-example-org._domainkey.<tenant>.d-v1.dkim.mail.microsoft.
+ *   selector2._domainkey.example.org  → the matching CNAME
  * Control: `zzz-nonexistent._domainkey.<same domain>` returns nothing, so the
  * probe CAN report an absence — this was a false negative, not a dead lookup.
  *

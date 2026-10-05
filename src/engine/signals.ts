@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PORTED VERBATIM (pure, no-DB) from the RadMail main app:
-//   /Users/GreenLife/Documents/CODE/RadMail/src/lib/importance/signals.ts
+//   (RadMail main app) src/lib/importance/signals.ts
 // Behavioral-signal dependency of the importance scorer. Recovered into
 // radmail-mcp so the MCP sandbox runs the SAME deterministic math as production.
 // Keep byte-for-byte with source.

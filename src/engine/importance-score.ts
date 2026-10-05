@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PORTED VERBATIM (pure, no-DB) from the RadMail main app:
-//   /Users/GreenLife/Documents/CODE/RadMail/src/lib/importance/score.ts
+//   (RadMail main app) src/lib/importance/score.ts
 // The crown-jewel two-axis importance scorer. Recovered into radmail-mcp so the
 // MCP sandbox ranks mail with the SAME deterministic math as production.
 // Keep byte-for-byte with source.

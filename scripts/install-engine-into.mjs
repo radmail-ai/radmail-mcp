@@ -1,30 +1,26 @@
 #!/usr/bin/env node
 // VENDOR THE RADMAIL ENGINE INTO AN ORG'S REPO, FROM A RELEASE TAG. Dry run unless --apply.
 //
-//   node scripts/install-engine-into.mjs ../vrg-app              # show what would happen
-//   node scripts/install-engine-into.mjs ../vrg-app --apply
-//   node scripts/install-engine-into.mjs ../vrg-app --allow-unreleased [--apply]   # testing only
-//   node scripts/install-engine-into.mjs ../vrg-app --force --apply  # past an edited copy / a downgrade
+//   node scripts/install-engine-into.mjs ../consumer-app              # show what would happen
+//   node scripts/install-engine-into.mjs ../consumer-app --apply
+//   node scripts/install-engine-into.mjs ../consumer-app --allow-unreleased [--apply]   # testing only
+//   node scripts/install-engine-into.mjs ../consumer-app --force --apply  # past an edited copy / a downgrade
 //
 // Exit: 0 installed or already current · 1 REFUSED (stale tag, edited copy,
 // downgrade, copy did not hash back) · 2 CANNOT-VERIFY (no tag, tag predates
 // engine.json, a file unreadable at the tag) · 64 usage.
 //
 // ═════════════════════════════════════════════════════════════════════════════
-// 🩸 WHY THIS INSTALLS A TAG AND NEVER THE WORKING TREE — measured 2026-09-26
+// WHY THIS INSTALLS A TAG AND NEVER THE WORKING TREE
 //
-// The first version of this script (#16) built the bundle from whatever sat in
-// THIS checkout and copied it out. VRG's main carries the result, stamped
-// `radmail-mcp@0.5.1` — and there is no 0.5.1 anywhere a person can check out:
-// the newest tag in this repo is v0.4.0 (which predates engine-dist/ entirely)
-// and npm serves 0.5.0. The copy happens to be byte-identical to one commit on
-// main, but nothing in the copy says which, and the next install from a stale
-// or dirty laptop would have looked exactly the same.
+// An earlier version of this script built the bundle from whatever sat in
+// THIS checkout and copied it out. A copy made that way is stamped with the
+// package version, but that version may not exist anywhere a person can check
+// out, and nothing in the copy says which commit it came from. The next install
+// from a stale or dirty checkout would look exactly the same.
 //
-// feedback-engine paid for this shape first: three orgs on three different
-// bundles, all stamped v0.67.0, two of them installed from an unreleased tree.
-// Its install-into.mjs was changed to install the newest tag by default; this
-// is the same rule, and the same escape.
+// So the installer takes the newest engine release tag by default, and
+// installing from the working tree is an explicit, self-announcing escape.
 //
 // ⚖️ `--allow-unreleased` STILL EXISTS, because testing a fix in a consumer
 // before tagging is legitimate. It must be ASKED FOR, it says so on every line
@@ -32,8 +28,8 @@
 // copy itself carries the admission, not only this run's scrollback.
 //
 // ── THE DESCRIPTOR ──────────────────────────────────────────────────────────
-// `engine.json` at the repo root describes this engine for a shared, fleet-wide
-// installer (fleet design §B1). It is read AT THE TAG. A tag that predates
+// `engine.json` at the repo root describes this engine for a shared installer.
+// It is read AT THE TAG. A tag that predates
 // engine.json is refused (CANNOT-VERIFY), not guessed at: the first installable
 // tag is therefore one cut at or after the commit that added engine.json.
 // ═════════════════════════════════════════════════════════════════════════════
@@ -134,8 +130,7 @@ export function resolveSource(root, { allowUnreleased = false } = {}) {
       message:
         `🛑 NO ENGINE RELEASE TAG (${treeDesc.tagPrefix}*) in ${root}.\n\n` +
         `   This installs the newest ${treeDesc.tagPrefix}* TAG, not the working tree: a copy vendored from an\n` +
-        `   unreleased tree asserts a release nobody can check out (VRG carries one stamped\n` +
-        `   radmail-mcp@0.5.1 while the newest tag here is v0.4.0).\n\n` +
+        `   unreleased tree asserts a release nobody can check out.\n\n` +
         `   ▶️ Cut an engine release tag, or pass --allow-unreleased if you are deliberately testing a\n` +
         `      fix in a consumer before tagging. (Did you fetch tags? git fetch --tags)`,
     };

@@ -24,7 +24,7 @@ const KEY = "tmk_test_secret_key_123";
 const HIT = {
   id: "em_abc123",
   receivedAt: "2026-06-30T17:05:00.000Z",
-  from: "sarah@knownclient.com",
+  from: "sarah@knownclient.example",
   fromName: "Sarah Ives",
   subject: "Re: Q3 deck",
   classification: "invoice",
@@ -120,7 +120,7 @@ test("connected search: maps v1 params + Bearer header, taints content fields, p
   assert.equal(r.results.length, 1);
   const hit = r.results[0];
   assert.equal(hit.messageId, "em_abc123");
-  assert.equal(hit.from, "sarah@knownclient.com");
+  assert.equal(hit.from, "sarah@knownclient.example");
   assert.equal(hit.receivedAt, HIT.receivedAt);
   assert.equal(hit.threadId, "th_9");
   for (const f of ["fromName", "subject", "snippet", "whyMatched", "classification", "isSpam", "needsOwnerEyes", "counterparty"]) {
@@ -220,7 +220,7 @@ test("connected search: ok:false API body fails closed (never fabricates)", asyn
 test("sandbox path is byte-for-byte identical with and without RADMAIL_API_KEY set", () => {
   const messages = [
     {
-      from: "sarah@knownclient.com",
+      from: "sarah@knownclient.example",
       subject: "Re: Q3 deck",
       body: "Can you get me the revised numbers by Thursday?",
       knownSender: true,
@@ -306,14 +306,14 @@ test("read_email without a key returns the setup pointer (not an error)", async 
 const RIGHT_NOW_ITEM = {
   id: "em_rn1",
   receivedAt: "2026-07-01T15:00:00.000Z",
-  from: "hi@seattlecannabis.co",
-  fromName: "Austin Aronson",
-  subject: "Dutchie cutover question",
+  from: "frontdesk@shop.example.com",
+  fromName: "Pat Example",
+  subject: "POS cutover question",
   classification: "operations",
   classificationSource: "llm",
   isSpam: false,
   needsOwnerEyes: true,
-  counterparty: "Seattle Cannabis Co.",
+  counterparty: "Example Shop Co.",
   threadId: "th_42",
   importance: 88,
   urgency: 74,
@@ -352,7 +352,7 @@ test("connected list_right_now: maps v1 params + Bearer, taints content fields, 
   assert.equal(r.lane.length, 1);
   const item = r.lane[0];
   assert.equal(item.messageId, "em_rn1");
-  assert.equal(item.from, "hi@seattlecannabis.co");
+  assert.equal(item.from, "frontdesk@shop.example.com");
   assert.equal(item.receivedAt, RIGHT_NOW_ITEM.receivedAt);
   assert.equal(item.threadId, "th_42");
   assert.equal(item.classificationSource, "llm");
@@ -389,7 +389,7 @@ test("connected list_right_now: 401 fails closed — typed auth error, no lane f
 test("list_right_now sandbox path is byte-for-byte identical with and without RADMAIL_API_KEY set", () => {
   const messages = [
     {
-      from: "sarah@knownclient.com",
+      from: "sarah@knownclient.example",
       subject: "Re: Q3 deck",
       body: "Can you get me the revised numbers by Thursday?",
       knownSender: true,
@@ -426,25 +426,25 @@ test("list_right_now without messages and without a key returns the two-options 
 
 // ─── v0.3.0: connected list_commitments ──────────────────────────────────────
 
-// Verbatim prod shape (2026-07-02) — duePhrase null, state "escalated".
+// Production-shaped fixture (fictional data) — duePhrase null, state "escalated".
 const COMMITMENT_PROD = {
   id: "cmt_1",
   direction: "owed_by_us",
-  party: "Doug / Seattle Cannabis Co.",
-  action: "Confirm in Dutchie whether the loyalty sync is enabled",
+  party: "Owner / Example Shop Co.",
+  action: "Confirm in the POS whether the rewards sync is enabled",
   actionType: "answer_question",
   dueDate: "2026-06-30",
   duePhrase: null,
   state: "escalated",
   confidence: 0.92,
-  counterpartyEmail: "hi@seattlecannabis.co",
+  counterpartyEmail: "frontdesk@shop.example.com",
 };
 
 const COMMITMENT_WITH_PHRASE = {
   id: "cmt_2",
   direction: "owed_to_us",
-  party: "Metrc support",
-  action: "Send the CO sandbox credentials",
+  party: "Example Vendor support",
+  action: "Send the sandbox credentials",
   actionType: "send_item",
   dueDate: null,
   duePhrase: "by end of week",
@@ -491,7 +491,7 @@ test("connected list_commitments: maps v1 params + fields, taints party/action/d
   assert.equal(c1.dueDate, "2026-06-30");
   assert.equal(c1.state, "escalated");
   assert.equal(c1.confidence, 0.92);
-  assert.equal(c1.counterpartyEmail, "hi@seattlecannabis.co");
+  assert.equal(c1.counterpartyEmail, "frontdesk@shop.example.com");
   assert.ok(isTainted(c1.party), "party must be tainted (real-mail-derived text)");
   assert.ok(isTainted(c1.action), "action must be tainted (real-mail-derived text)");
   assert.equal(c1.party.value, COMMITMENT_PROD.party);
@@ -543,7 +543,7 @@ test("connected list_commitments: timeout fails closed (no retry on abort)", asy
 test("list_commitments sandbox path is byte-for-byte identical with and without RADMAIL_API_KEY set", () => {
   const messages = [
     {
-      from: "sarah@knownclient.com",
+      from: "sarah@knownclient.example",
       subject: "Re: Q3 deck",
       body: "Can you get me the revised numbers by Thursday?",
       knownSender: true,

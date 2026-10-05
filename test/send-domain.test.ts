@@ -73,7 +73,7 @@ test("normalizeDomain: strips protocol, path, port, userinfo, trailing dot; lowe
   assert.equal(normalizeDomain("  example.com.  "), "example.com");
   assert.equal(normalizeDomain("example.com:8443"), "example.com");
   assert.equal(normalizeDomain("//cdn.Example.org"), "cdn.example.org");
-  assert.equal(normalizeDomain("doug@sub.example.co.uk"), "sub.example.co.uk");
+  assert.equal(normalizeDomain("d@sub.example.org"), "sub.example.org");
 });
 
 test("normalizeDomain: rejects obviously invalid input", () => {
@@ -158,15 +158,15 @@ test("checkDomainHealth: redirect-only SPF is followed one hop (gmail.com shape)
 // ─── DMARC pure logic ────────────────────────────────────────────────────────
 
 test("DMARC: p=quarantine / p=reject pass; p=none warns; missing = none", () => {
-  assert.equal(analyzeDmarc(["v=DMARC1; p=quarantine; rua=mailto:d@x.com"]).verdict, "pass");
+  assert.equal(analyzeDmarc(["v=DMARC1; p=quarantine; rua=mailto:d@x.example"]).verdict, "pass");
   assert.equal(analyzeDmarc(["v=DMARC1; p=reject"]).verdict, "pass");
-  assert.equal(analyzeDmarc(["v=DMARC1; p=none; rua=mailto:d@x.com"]).verdict, "warn");
+  assert.equal(analyzeDmarc(["v=DMARC1; p=none; rua=mailto:d@x.example"]).verdict, "warn");
   assert.equal(analyzeDmarc(["unrelated=txt"]).verdict, "none");
   assert.equal(analyzeDmarc([]).verdict, "none");
 });
 
 test("DMARC: parsed details — policy, sp, pct, rua presence", () => {
-  const d = analyzeDmarc(["v=DMARC1; p=quarantine; sp=reject; pct=50; rua=mailto:agg@x.com"]);
+  const d = analyzeDmarc(["v=DMARC1; p=quarantine; sp=reject; pct=50; rua=mailto:agg@x.example"]);
   assert.equal(d.policy, "quarantine");
   assert.equal(d.subdomainPolicy, "reject");
   assert.equal(d.pct, 50);
@@ -178,7 +178,7 @@ test("DMARC: parsed details — policy, sp, pct, rua presence", () => {
 });
 
 test("DMARC: v=DMARC1 with no p= tag is invalid → fail; finder ports parseDmarcRecord", () => {
-  assert.equal(analyzeDmarc(["v=DMARC1; rua=mailto:d@x.com"]).verdict, "fail");
+  assert.equal(analyzeDmarc(["v=DMARC1; rua=mailto:d@x.example"]).verdict, "fail");
   assert.equal(findDmarcRecord(["other", "  v=dmarc1; p=none  "]), "v=dmarc1; p=none");
   assert.equal(dmarcPolicy("v=DMARC1; p = Quarantine ;"), "quarantine");
 });
@@ -412,7 +412,7 @@ test("probe list: keeps the whole v1 set — widening must never DROP coverage",
 });
 
 test("M365-hosted domain: selector1/selector2 CNAMEs are FOUND and grade pass", async () => {
-  // The exact live shape of greenwellness.org on 2026-08-25. Pre-fix this
+  // The live shape of a correctly configured M365 domain (2026-08-25). Pre-fix this
   // returned verdict "warn" with selectorsFound: [] — a false negative on a
   // domain whose DKIM is correctly configured.
   __setDnsForTests(
@@ -520,7 +520,7 @@ test("a DKIM lookup that FAILED is reported as lookupFailures, not as an absence
   __setDnsForTests({
     async resolveTxt(name: string) {
       if (name === DOMAIN) return [["v=spf1 -all"]];
-      if (name === `_dmarc.${DOMAIN}`) return [["v=DMARC1; p=reject; rua=mailto:d@x.com"]];
+      if (name === `_dmarc.${DOMAIN}`) return [["v=DMARC1; p=reject; rua=mailto:d@x.example"]];
       throw boom; // ONLY the _domainkey probes fail to RESOLVE
     },
     async resolveCname() {
