@@ -69,7 +69,7 @@ test("POSITIVE CONTROL: a clean engine tag installs, and re-running is a no-op",
   assert.equal(r.ok, true, (r as any).message);
   assert.equal(r.source, "refs/tags/radmail-engine-v0.5.1");
   assert.equal(r.unreleased, false);
-  // Same sources + same version ⇒ the same bytes this repo tracks (and VRG carries).
+  // Same sources + same version ⇒ the same bytes this repo tracks (and a consumer carries).
   assert.equal(r.bundle, readFileSync(OUT_FILE, "utf8"));
   assert.equal(r.manifestLine, readFileSync(HASH_FILE, "utf8"));
 
@@ -171,7 +171,7 @@ test("an existing copy EDITED IN PLACE is refused; --force replaces it", () => {
 
 // 🩸 Review of #17: the "same" verdict compared only the body hash (sentinel onward)
 // and the hash line, so code added ABOVE the sentinel read as "identical bytes".
-// That verdict is what RELEASE-NOTES tells a person to rely on to prove VRG's copy.
+// That verdict is what RELEASE-NOTES tells a person to rely on to prove a consumer's copy.
 test("code added ABOVE the sentinel is NOT identical — a body-hash match with different bytes is REFUSED", () => {
   const src = fixtureRepo();
   g(src, "tag", "radmail-engine-v0.5.1");

@@ -42,7 +42,7 @@ function freshStore(): LearningStore {
 // ── redaction: learn from STRUCTURE, never content ──────────────────────────
 
 test("paramShape keeps key->type, never values", () => {
-  const shape = paramShape({ from: "a@b.com", limit: 5, flag: true, list: [1], obj: {} });
+  const shape = paramShape({ from: "a@b.example", limit: 5, flag: true, list: [1], obj: {} });
   assert.deepEqual(shape, {
     from: "string",
     limit: "number",
@@ -51,12 +51,12 @@ test("paramShape keeps key->type, never values", () => {
     obj: "object",
   });
   // No value ever leaks.
-  assert.ok(!JSON.stringify(shape).includes("a@b.com"));
+  assert.ok(!JSON.stringify(shape).includes("a@b.example"));
 });
 
 test("redactAsk scrubs emails / phones / long tokens and caps length", () => {
-  const out = redactAsk("email me at jane@acme.com or call 415-555-1212 token ABCDEFGHIJKLMNOPQRSTUVWX1234");
-  assert.ok(!out.includes("jane@acme.com"));
+  const out = redactAsk("email me at jane@acme.example or call 415-555-1212 token ABCDEFGHIJKLMNOPQRSTUVWX1234");
+  assert.ok(!out.includes("jane@acme.example"));
   assert.ok(!out.includes("415-555-1212"));
   assert.ok(out.includes("<email>"));
   assert.ok(out.includes("<phone>"));

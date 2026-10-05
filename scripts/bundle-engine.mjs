@@ -6,17 +6,18 @@
 //   node scripts/bundle-engine.mjs --check   # exit 1 if engine-dist/ is stale (CI)
 //
 // ── WHY ─────────────────────────────────────────────────────────────────────
-// The hosted product cannot serve a regulated org whose regime forbids its
-// subprocessors (VRG: CUI; GreenWellness: PHI) — the lane decision blocks the
-// push rail. But the part of RadMail those orgs need most on their own inbox
+// Some organisations cannot use a hosted email subprocessor at all (for
+// example, a regulated environment whose rules forbid sending mail content to
+// a third party). But the part of RadMail they need most on their own inbox
 // surfaces — the BEC hard-stop detector (changed banking, money, decision,
 // prompt injection) — is pure TypeScript with no network, no DB, no model.
-// It can run IN-PROCESS inside the org's own app, so no email content leaves.
+// It can run IN-PROCESS inside the organisation's own app, so no email content
+// leaves.
 //
-// Same pattern as the feedback-engine: one concatenated file, a sha256 over
-// the SOURCE modules stamped in its header, an installer that copies it into
-// `<repo>/vendor/` with the hash beside it, and a verify line the consumer can
-// run. Unverifiable vendoring drifts silently; a copy with a hash drifts loudly.
+// The pattern: one concatenated file, a sha256 over the SOURCE modules stamped
+// in its header, an installer that copies it into `<repo>/vendor/` with the
+// hash beside it, and a verify line the consumer can run. Unverifiable
+// vendoring drifts silently; a copy with a hash drifts loudly.
 //
 // ── WHAT IS IN IT ───────────────────────────────────────────────────────────
 // ORDER matters: later modules may reference earlier ones. Imports between

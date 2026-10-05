@@ -140,7 +140,7 @@ describe("the hard-stop sets agree with the firewall", () => {
     // Without this, the assertion above is satisfied by a tool that refuses
     // everything — which would make the contract's whole premise vacuous.
     const out = draftFollowupTool({
-      from: "kat@known.example",
+      from: "alex@known.example",
       subject: "re",
       body: "Thanks — Thursday works for the delivery.",
       knownSender: true,

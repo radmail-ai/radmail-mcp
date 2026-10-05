@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PORTED VERBATIM (pure, no-DB) from the RadMail main app:
-//   /Users/GreenLife/Documents/CODE/RadMail/src/server/commitments/send-disposition.ts
+//   (RadMail main app) src/server/commitments/send-disposition.ts
 // Recovered into radmail-mcp so the MCP sandbox runs the SAME deterministic BEC
 // firewall as production. This is the sacred firewall — it may only be TIGHTENED,
 // never loosened. Keep byte-for-byte with source.

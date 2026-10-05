@@ -1,0 +1,65 @@
+# REUSABLE public-surface denylist gate. Any public repository can call it:
+#
+#   jobs:
+#     denylist:
+#       uses: radmail-ai/radmail-mcp/.github/workflows/public-denylist.yml@main
+#       with: { pack: false }        # true for an npm package (builds, then scans the tarball)
+#       secrets:
+#         PUBLIC_DENYLIST: ${{ secrets.PUBLIC_DENYLIST }}
+#
+# One script, one place: scripts/check-public-denylist.mjs in this repository.
+# The term list stays in each caller's PUBLIC_DENYLIST secret (or an org-level
+# secret), never in a file.
+name: public-denylist
+
+on:
+  workflow_call:
+    inputs:
+      pack:
+        description: "Also build and scan the real npm pack tarball"
+        type: boolean
+        default: false
+      gate-ref:
+        description: "Ref of radmail-ai/radmail-mcp to take the gate script from"
+        type: string
+        default: main
+    secrets:
+      PUBLIC_DENYLIST:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  denylist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: target
+      - uses: actions/checkout@v4
+        with:
+          repository: radmail-ai/radmail-mcp
+          ref: ${{ inputs.gate-ref }}
+          path: gate
+          sparse-checkout: scripts/check-public-denylist.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: build (pack mode only)
+        if: ${{ inputs.pack }}
+        working-directory: target
+        run: npm ci && npm run build --if-present
+      - name: self-test the gate
+        run: node gate/scripts/check-public-denylist.mjs --self-test
+      - name: scan
+        env:
+          RADMAIL_PUBLIC_DENYLIST: ${{ secrets.PUBLIC_DENYLIST }}
+          PACK: ${{ inputs.pack && '--pack' || '' }}
+        run: |
+          if [ -z "$RADMAIL_PUBLIC_DENYLIST" ]; then
+            echo "::warning::PUBLIC_DENYLIST secret is not set — the term half of the denylist gate DID NOT RUN."
+          fi
+          node gate/scripts/check-public-denylist.mjs --root "$GITHUB_WORKSPACE/target" $PACK

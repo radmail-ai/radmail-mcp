@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PORTED VERBATIM (pure, no-DB) from the RadMail main app:
-//   /Users/GreenLife/Documents/CODE/RadMail/src/server/commitments/types.ts
+//   (RadMail main app) src/server/commitments/types.ts
 // Recovered into radmail-mcp so the MCP sandbox runs the SAME deterministic
 // commitment enums as production. Do not diverge — keep byte-for-byte with source.
 // ─────────────────────────────────────────────────────────────────────────────

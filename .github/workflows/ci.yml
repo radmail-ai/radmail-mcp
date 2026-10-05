@@ -104,3 +104,22 @@ jobs:
         env:
           SKIP_LIVE: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: npm run contract
+
+      # PUBLIC-SURFACE DENYLIST. This repository and its npm tarball are public.
+      # The gate refuses, in every tracked file AND in the real `npm pack` output:
+      # addresses outside the reserved documentation domains, absolute
+      # home-directory paths, internal record-id shapes, files that must not ship
+      # (tests, scripts, sources), and every term in the PUBLIC_DENYLIST secret.
+      # The term list is a secret because a committed list would itself be the
+      # disclosure. Without the secret the term half cannot fail, and the script
+      # prints that it did not run; the structural half still runs.
+      - name: public denylist (source + npm tarball)
+        if: ${{ !cancelled() }}
+        env:
+          RADMAIL_PUBLIC_DENYLIST: ${{ secrets.PUBLIC_DENYLIST }}
+        run: |
+          node scripts/check-public-denylist.mjs --self-test
+          if [ -z "$RADMAIL_PUBLIC_DENYLIST" ]; then
+            echo "::warning::PUBLIC_DENYLIST secret is not set — the term half of the denylist gate DID NOT RUN."
+          fi
+          node scripts/check-public-denylist.mjs --pack

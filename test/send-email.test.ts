@@ -30,10 +30,10 @@ const API = "https://app.radmail.ai";
 const REQ = "0b4f8a8e-6d2c-4f3a-9c1e-2a7d5b9e1f00";
 
 const ARGS = {
-  from: "doug@seattlecannabis.co",
-  to: ["kat@seattlecannabis.co"],
+  from: "owner@example.com",
+  to: ["manager@example.com"],
   subject: "Thursday delivery",
-  markdown: "Hi Kat — Thursday works. Thanks!",
+  markdown: "Hi Alex — Thursday works. Thanks!",
 };
 
 function json(body: unknown, status: number): Response {
@@ -88,7 +88,7 @@ describe("outcomes", () => {
           status: "held",
           requestId: REQ,
           tier: "normal",
-          holdReasons: ["not_on_no_tap_list: new@stranger.com"],
+          holdReasons: ["not_on_no_tap_list: new@stranger.example"],
           reviewPath: `/sends/${REQ}`,
           expiresAt: "2026-10-04T00:00:00.000Z",
           // A credential the server must never send — and if it ever did, it
@@ -102,7 +102,7 @@ describe("outcomes", () => {
     const r = (await sendEmailTool(ARGS)) as Record<string, unknown>;
     assert.equal(r.outcome, "held");
     assert.equal(r.reviewUrl, `${API}/sends/${REQ}`);
-    assert.deepEqual(r.holdReasons, ["not_on_no_tap_list: new@stranger.com"]);
+    assert.deepEqual(r.holdReasons, ["not_on_no_tap_list: new@stranger.example"]);
     const wire = JSON.stringify(r);
     assert.doesNotMatch(wire, /ctk_|confirmToken|token/i, "a hold must carry no credential");
     assert.match(String(r.note), /no tool can release it/);
@@ -115,7 +115,7 @@ describe("outcomes", () => {
   });
 
   test("refused: an API refusal is reported, with the server's reason", async () => {
-    serve(() => json({ ok: false, error: "recipient_suppressed", detail: "x@y.com is on the suppression list." }, 409));
+    serve(() => json({ ok: false, error: "recipient_suppressed", detail: "x@y.example is on the suppression list." }, 409));
     const r = (await sendEmailTool(ARGS)) as Record<string, unknown>;
     assert.equal(r.outcome, "refused");
     assert.equal(r.error, "recipient_suppressed");

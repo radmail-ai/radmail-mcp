@@ -3,13 +3,13 @@
 // `node scripts/bundle-engine.mjs`, and re-install with
 // `node scripts/install-engine-into.mjs <repo> --apply`.
 // radmail-mcp 0.5.1 · modules: engine/types.ts, engine/send-disposition.ts
-// sha256(body): 175f304b61954c9e1af40326405cfb9b2f6e46abb2c1526391ec62028dce8068
+// sha256(body): ea47d97174ae3b2f66f6217f38ee03b158184fa7f8fec2583a4821d702ce49f3
 // Pure: no network, no DB, no model. Safe to run inside a regulated org's
 // own process — no email content leaves the app that calls it.
 // ═══ module: src/engine/types.ts ═══
 // ─────────────────────────────────────────────────────────────────────────────
 // PORTED VERBATIM (pure, no-DB) from the RadMail main app:
-//   /Users/GreenLife/Documents/CODE/RadMail/src/server/commitments/types.ts
+//   (RadMail main app) src/server/commitments/types.ts
 // Recovered into radmail-mcp so the MCP sandbox runs the SAME deterministic
 // commitment enums as production. Do not diverge — keep byte-for-byte with source.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ export type ExtractedCommitment = {
 // ═══ module: src/engine/send-disposition.ts ═══
 // ─────────────────────────────────────────────────────────────────────────────
 // PORTED VERBATIM (pure, no-DB) from the RadMail main app:
-//   /Users/GreenLife/Documents/CODE/RadMail/src/server/commitments/send-disposition.ts
+//   (RadMail main app) src/server/commitments/send-disposition.ts
 // Recovered into radmail-mcp so the MCP sandbox runs the SAME deterministic BEC
 // firewall as production. This is the sacred firewall — it may only be TIGHTENED,
 // never loosened. Keep byte-for-byte with source.
