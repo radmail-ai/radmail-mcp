@@ -12,4 +12,9 @@
   packed tarball contains an address outside the reserved documentation domains, an
   absolute home-directory path, an internal record id, or a term from a private
   denylist held as a repository secret.
+- **Docs:** *Verify before you connect* now publishes the check behind the strongest claim in
+  the README — that no tool can release a held send. The hosted `tools/list` cannot reach it
+  (the send tool is not on the hosted tier), so the command runs the existing
+  `release a held send` assertions from the MIT source, and a second command shows the
+  check failing when a release route is added. Observed 2026-10-05: 3 pass, 0 fail.
 - Everything that was already on `main` after 0.5.0 (see the git log) ships in this release.

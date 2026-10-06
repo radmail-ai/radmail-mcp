@@ -68,6 +68,24 @@ curl -s -X POST https://radmail.ai/api/mcp/sandbox \
 
 Read the names back. There is no `send`, no `send_email`, no `pay`, no `update_banking` — and that absence *is* the enforcement. (One exception, and only where an operator chose it: a **local** stdio server started with `RADMAIL_SEND_TOOL=1` also lists `send_email` — see *Opt-in: sending* below. The hosted endpoints never do.) Observed on the hosted sandbox **2026-09-30: 6 tools** — `triage_inbox`, `list_right_now`, `why_surfaced`, `list_commitments`, `draft_reply`, `search`. That is a dated observation of the **hosted sandbox tier**, not a ceiling: the local stdio package exposes the fuller set in the table above. Re-run the command rather than trusting this line.
 
+**And the one claim you cannot check from the outside — check it in the source.** The strongest sentence in this README is *"no tool can release a held send"* (below, under *Opt-in: sending*). A paragraph is not evidence, and that claim is the one a hosted `tools/list` cannot reach, because the send tool is not on the hosted tier at all. It is asserted by a test in this repo — so run the test instead of believing the paragraph:
+
+```bash
+git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm install
+RADMAIL_TELEMETRY=off node --test --import tsx \
+  --test-name-pattern="release a held send" test/send-email.test.ts
+```
+
+Three things are asserted: that **every URL the tool fetches, across every outcome, is the send path** and never a `/confirm` route; that **neither the client nor the tool names a confirm/release route** anywhere in its source; and that **the input schema has no field** that could name an earlier request to act on. Observed **2026-10-05: 3 pass, 0 fail** — a dated observation, like every other count in this file. Re-run it.
+
+🔑 **Now make it fail, because a guard you have not seen bite is not a guard.** Add one line to `src/lib/send.ts` —
+
+```bash
+echo 'export const RELEASE_PATH = "/api/v1/sends/confirm";' >> src/lib/send.ts
+```
+
+— and re-run the command above: the second assertion fails and the suite exits non-zero. Then `git checkout src/lib/send.ts` to put it back. RadMail publishes the falsification step rather than asking you to assume the check is real.
+
 ## Connect
 
 **Fastest — zero-auth hosted sandbox** (no install, no key, no signup). Point any MCP client at the streamable-HTTP endpoint:
@@ -193,7 +211,7 @@ claude mcp add radmail \
 | `held` | Nothing was sent. The owner releases or discards it in the RadMail app at `reviewUrl`. |
 | `refused` | Not sent and not held — bad input, sending switched off, no send key, a suppressed recipient. |
 
-**RadMail decides, not the agent.** It sends at once only when every recipient is on the owner's own team (a domain the workspace marked internal) or an established two-way contact; everything else is held. Money, changed-banking, first-contact, decision and injection content, and regulator / government / court / bank recipients, always hold. **No tool can release a held send** — the response carries a link to the app page, never a token, and the client only ever calls the send path.
+**RadMail decides, not the agent.** It sends at once only when every recipient is on the owner's own team (a domain the workspace marked internal) or an established two-way contact; everything else is held. Money, changed-banking, first-contact, decision and injection content, and regulator / government / court / bank recipients, always hold. **No tool can release a held send** — the response carries a link to the app page, never a token, and the client only ever calls the send path. Do not take that on trust: *Verify before you connect* above carries the command that asserts it, and the one-line edit that makes it fail.
 
 ⚖️ **Be exact about what this changes.** On a server with sending turned on, the *capability-absent* label above no longer describes sending: the capability exists and is narrowed by configuration (`config-restricted`), and a held send is a person approving a request. The five hard-stopped classes still cannot leave without that person. The safety block on every response says which kind of server you are talking to: a send-enabled server replaces the "never sends mail" sentence with a `sendSurface` statement rather than leaving a false one in place.
 
