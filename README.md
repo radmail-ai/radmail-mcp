@@ -31,6 +31,30 @@ Call `triage_inbox` and **omit the token** — RadMail auto-provisions a free sa
 | `report_need` / `request_capability` | Tell RadMail what was awkward / what you wish existed — the surface adapts. |
 | `radmail_learning_insights` | What RadMail has learned about how you work. |
 
+### "How many tools?" — and the second number that matters more
+
+Public round-ups of email MCP servers commonly quote a **tool count** as a measure of depth. Tool count measures **surface area**, not judgment — and for a server trusted with an inbox, the useful number is the second one: **of those tools, how many can send?**
+
+RadMail publishes both, as dated observations you can reproduce against any MCP server — this one included:
+
+| Tier | Tools | Send-capable |
+|---|---|---|
+| Hosted zero-auth sandbox (`https://radmail.ai/api/mcp/sandbox`) | **6** | **0** |
+| This npm package, default | **13** | **0** |
+| This npm package with `RADMAIL_SEND_TOOL=1` (local stdio only) | **14** | **1** — `send_email`, which hands mail to RadMail's outbound gate and cannot release a hold |
+
+Observed **2026-10-09**. Reproduce row 1 with the `tools/list` command under *Verify before you connect*. Reproduce row 2 from the frozen manifest — the surface the server refuses to deviate from:
+
+```bash
+node -e 'const s=require("fs").readFileSync("src/tool-manifest.ts","utf8");
+const n=[...s.matchAll(/"name": "([a-z_]+)"/g)].map(m=>m[1]);
+console.log(n.length, n.join(" "))'
+```
+
+⚠️ **One honest caveat, because the naive version of this check gets it wrong:** grepping that list for `send` matches **`check_send_domain`**, which is a read-only SPF/DKIM/DMARC *lookup* over DNS — it reads a domain's published records and sends nothing. Read each tool's description, not just its name. That caveat applies to whatever server you are evaluating, not only to this one.
+
+**The ratio is the point, and it is not a verdict on anyone else.** A wide, send-capable tool surface is a legitimate design for an agent that is *supposed* to send, and most of this category is built for exactly that job. It is the wrong design for the one class of email where being argued into sending *is* the whole attack. RadMail reports **0 send-capable tools on every hosted endpoint** — see *The safety contract* for why that is `capability-absent` rather than a setting someone could switch.
+
 ## The safety contract (un-bypassable by design)
 
 These are decided by deterministic code, not model judgment — see [`/.well-known/agent-safety.json`](./public/.well-known/agent-safety.json):
@@ -66,7 +90,7 @@ curl -s -X POST https://radmail.ai/api/mcp/sandbox \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-Read the names back. There is no `send`, no `send_email`, no `pay`, no `update_banking` — and that absence *is* the enforcement. (One exception, and only where an operator chose it: a **local** stdio server started with `RADMAIL_SEND_TOOL=1` also lists `send_email` — see *Opt-in: sending* below. The hosted endpoints never do.) Observed on the hosted sandbox **2026-09-30: 6 tools** — `triage_inbox`, `list_right_now`, `why_surfaced`, `list_commitments`, `draft_reply`, `search`. That is a dated observation of the **hosted sandbox tier**, not a ceiling: the local stdio package exposes the fuller set in the table above. Re-run the command rather than trusting this line.
+Read the names back. There is no `send`, no `send_email`, no `pay`, no `update_banking` — and that absence *is* the enforcement. (One exception, and only where an operator chose it: a **local** stdio server started with `RADMAIL_SEND_TOOL=1` also lists `send_email` — see *Opt-in: sending* below. The hosted endpoints never do.) Observed on the hosted sandbox **2026-10-09: 6 tools** — `triage_inbox`, `list_right_now`, `why_surfaced`, `list_commitments`, `draft_reply`, `search`. That is a dated observation of the **hosted sandbox tier**, not a ceiling: the local stdio package exposes the fuller set in the table above. Re-run the command rather than trusting this line.
 
 **And the one claim you cannot check from the outside — check it in the source.** The strongest sentence in this README is *"no tool can release a held send"* (below, under *Opt-in: sending*). A paragraph is not evidence, and that claim is the one a hosted `tools/list` cannot reach, because the send tool is not on the hosted tier at all. It is asserted by a test in this repo — so run the test instead of believing the paragraph:
 
