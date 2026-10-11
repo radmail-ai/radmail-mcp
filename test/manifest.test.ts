@@ -436,3 +436,37 @@ test("SCOPE: server.json version + its npm package version match package.json", 
     `server.json description is ${server.description.length} chars; the MCP server schema allows 1-100`,
   );
 });
+
+// 🩸 MEASURED 2026-10-10: a `title` on the WRONG SCHEMA is a silent no-op.
+//
+// The MCP server schema `2025-12-11` added an optional top-level `title` — the
+// human-readable display name a directory renders as its page title. `2025-09-29`
+// has no such field. Measured by diffing both published schemas, because the
+// registry's own server-json CHANGELOG never mentions `title` (grep: 0 hits), so
+// the schema files are the only source of truth for when it became available.
+//
+// The consequence is invisible at publish time: a record pinned to the older
+// schema that declares a title is accepted and the title is simply dropped, and
+// the directory falls back to the bare package slug. Measured the same day on
+// Glama, same page template, same directory: a server that publishes a `title`
+// renders "<its title> - MCP Connector | Glama", while RadMail's connector page
+// rendered "radmail-mcp - MCP Connector | Glama".
+//
+// This pin makes the pairing structural: if `title` is set, the pinned schema
+// must be a version that defines it. Offline by construction — no network.
+test("SCOPE: server.json title is non-empty, within the schema's 100-char cap, and pinned to a schema that HAS a title field", () => {
+  const SCHEMAS_WITH_TITLE = ["2025-12-11"];
+  const server = JSON.parse(readFileSync(join(REPO_ROOT, "server.json"), "utf8")) as {
+    $schema: string;
+    title?: string;
+  };
+  assert.ok(server.title, "server.json declares no title — directories fall back to the bare package slug");
+  assert.ok(
+    server.title.length >= 1 && server.title.length <= 100,
+    `server.json title is ${server.title.length} chars; the MCP server schema allows 1-100`,
+  );
+  assert.ok(
+    SCHEMAS_WITH_TITLE.some((v) => server.$schema.includes(`/schemas/${v}/`)),
+    `server.json declares a title but pins schema ${server.$schema} — a title on a schema without the field is dropped at publish time, silently`,
+  );
+});

@@ -245,6 +245,29 @@ The tool's description asks the agent to run its own correspondence review on th
 
 This server sends anonymous demand-signal telemetry to `https://app.radmail.ai/api/mcp-demand` so RadMail can see which tools agents actually use and what capabilities they ask for: **what's sent** is the tool name, the event type (`call` / `need` / `capability`), the need or capability text you explicitly submit via `report_need` / `request_capability`, and the optional agent id you pass. **What's never sent:** email content, message batches, search queries, results — and never your API key (in connected mode only the safe display prefix, `tmk_live_` + the first 4 characters, is transmitted so adoption of connected mode is distinguishable). Sends are fire-and-forget with a 3-second timeout and every failure silently swallowed — telemetry can never slow down or break a tool call. **Opt out entirely** with `RADMAIL_TELEMETRY=off`.
 
+## How a directory lists this server
+
+Third-party directories and answer engines don't read this README — they mirror the **`server.json`** record in the [official MCP registry](https://registry.modelcontextprotocol.io). Two publisher-controlled fields decide what a human or a model actually sees on those pages:
+
+- **`title`** — an optional human-readable display name, **max 100 characters**, present in the `2025-12-11` server schema and absent from `2025-09-29`. A directory with a title renders it; a record without one falls back to the bare package slug.
+- **`description`** — the one-line summary shown beneath it.
+
+Read what this repo declares, and what the live registry serves, side by side — no key, no clone:
+
+```bash
+# what main declares
+curl -s https://raw.githubusercontent.com/radmail-ai/radmail-mcp/main/server.json \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("title")); print(d["description"])'
+
+# what the live registry serves today
+curl -s 'https://registry.modelcontextprotocol.io/v0/servers?search=radmail' \
+  | python3 -c 'import json,sys; [print(s["server"]["version"], "|", s["server"].get("title"), "|", s["server"]["description"]) for s in json.load(sys.stdin)["servers"]]'
+```
+
+⚠️ **The two do not match yet, and that is stated here rather than glossed.** Observed **2026-10-10**: the registry's current (`isLatest`) record for `ai.radmail/radmail-mcp` is **0.5.0** on the `2025-09-29` schema — which has no `title` field at all — and carries the older 93-character description, while `main` is 0.5.1. So read this section as *what RadMail declares*, not as what a directory is showing you today; the second command above is the one that settles it either way.
+
+Updating the record is a credential action and a human's — `mcp-publisher login github` (or `login dns --domain radmail.ai`) then `mcp-publisher publish`. **`mcp-publisher validate` needs no credential**, so anyone can check the record is well-formed before trusting it; against this repo on 2026-10-10 it returns `✅ server.json is valid`.
+
 ## Links
 
 - Agent docs: <https://radmail.ai/for-agents>

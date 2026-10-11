@@ -47,6 +47,10 @@ The server sends anonymous demand-signal telemetry to `https://app.radmail.ai/ap
 
 A tool, not a guarantee — BAA + shared-responsibility framing. RadMail is **not** HIPAA-certified, FedRAMP-authorized, or SOC 2-certified.
 
+## How a directory lists this server
+
+Directories and answer engines mirror the `server.json` record in the official MCP registry, not this file. Two publisher-controlled fields drive what their pages show: `title` (optional human-readable display name, max 100 characters, present in the `2025-12-11` server schema and absent from `2025-09-29` — a record without one falls back to the bare package slug) and `description`. RadMail's `main` declares both: title `RadMail — Email MCP Server for AI Agent Inbox Triage, with a BEC Hard-Stop`, on the `2025-12-11` schema, validated by `mcp-publisher validate` (no credential needed) on 2026-10-10. ⚠️ Observed the same day, and stated rather than glossed: the live registry's current (`isLatest`) record is still **0.5.0** on the `2025-09-29` schema, so it carries **no title** and the older 93-character description. Read the claim as what RadMail declares, not as what a directory shows today, and settle it yourself: `curl -s 'https://registry.modelcontextprotocol.io/v0/servers?search=radmail'`. Publishing the record is a credential action and a human's (`mcp-publisher login github` or `login dns --domain radmail.ai`, then `mcp-publisher publish`).
+
 ## Links
 
 - Agent docs: https://radmail.ai/for-agents
