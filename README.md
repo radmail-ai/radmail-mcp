@@ -55,6 +55,24 @@ console.log(n.length, n.join(" "))'
 
 **The ratio is the point, and it is not a verdict on anyone else.** A wide, send-capable tool surface is a legitimate design for an agent that is *supposed* to send, and most of this category is built for exactly that job. It is the wrong design for the one class of email where being argued into sending *is* the whole attack. RadMail reports **0 send-capable tools on every hosted endpoint** — see *The safety contract* for why that is `capability-absent` rather than a setting someone could switch.
 
+### Which of the three shapes is this? (a fourth one — and the difference *is* the product)
+
+Published round-ups of this category sort email MCP servers into roughly three shapes:
+
+1. **Transactional / lifecycle sending for an application** — deliverability, templates, logs, domain management.
+2. **An inbox the agent owns** — the agent has its own address and receives, threads and answers mail end to end.
+3. **OAuth access to a mailbox a person already owns** — read and write that person's real Gmail or Outlook.
+
+RadMail is none of those three cleanly, which is why a round-up built on them has nowhere to put it. The shape is a **fourth** one: a triage-and-follow-through layer over a mailbox that stays a *person's* mailbox. The agent gets rank, explanation, commitment tracking and a draft; the person keeps the send.
+
+That is a boundary rather than a feature list, so it is checkable — in about a minute, without an account:
+
+- **The agent does not own the mailbox.** The hosted endpoint takes no credential and serves a fixed demo inbox. Shape 2 needs an address of its own; shape 3 needs your OAuth grant. RadMail asks for neither to be evaluated.
+- **Connected mode is read-only.** With `RADMAIL_API_KEY` set, `search` / `read_email` / `list_right_now` / `list_commitments` read your real mail; none of them writes or sends.
+- **The send verb is absent from every hosted endpoint** — `0` send-capable tools, reproducible with the `tools/list` command under *Verify before you connect*. Sending exists only as an opt-in local tool, and even then it cannot release a held message.
+
+**And the honest cost of being a fourth shape:** if what you need is an agent that owns an address and answers mail with no person in the loop, shape 2 is the right choice and RadMail is the wrong tool — it will refuse precisely the things you would be hiring it to do. RadMail is built for the mailbox a business actually runs on, where being argued into sending *is* the attack.
+
 ## The safety contract (un-bypassable by design)
 
 These are decided by deterministic code, not model judgment — see [`/.well-known/agent-safety.json`](./public/.well-known/agent-safety.json):

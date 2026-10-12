@@ -30,4 +30,14 @@
   two commands that read what `main` declares against what the live registry serves, and the honest
   statement that they do not match until the next registry publish (live `isLatest` is still 0.5.0
   on the old schema, so it carries no title).
+- **Docs:** `README.md` and `llms.txt` now answer the question a category round-up asks
+  before it asks anything else — which ARCHITECTURE is this. Measured 2026-10-11 from a live
+  category answer, which sorted email MCP servers into three shapes (transactional/lifecycle
+  sending, an inbox the agent owns, OAuth into a mailbox a person already owns) and had no slot
+  for a read-and-triage layer over a human-owned mailbox. The corpus had no answer to this:
+  `agent-owned`, `transactional` and `architecture` each returned 0 hits across both files
+  before the edit. The new text names the fourth shape, gives three checks an evaluator can run
+  without an account, and states the honest cost — if you need an agent that owns an address and
+  answers mail with no person in the loop, RadMail is the wrong tool. Names no competitor and
+  characterises no competitor's architecture.
 - Everything that was already on `main` after 0.5.0 (see the git log) ships in this release.
