@@ -8,6 +8,28 @@ This is the Model Context Protocol (MCP) server, so any AI agent can use the inb
 
 **If a fleet of MCP agents runs your execution layer while you sit in the decision seat, the inbox is the seat that needs a hard-stop first.** It's where a socially-engineered wire or banking change is irreversible — and where an autonomous process that can hit send can be talked into the loss. RadMail lets agents do the inbox's *work* (triage, the Right Now lane, commitment tracking, drafting) while money, changed banking, first contact, decisions, and prompt-injection stay human-only **by construction, not by a policy an agent could be argued out of**. That's what makes the company inbox delegable at all.
 
+## Why it withholds the draft, not just the send
+
+Ask this category how it keeps a person in the loop and the published answer is a draft: the agent composes, a human approves, nothing auto-sends. **For ordinary mail that is the right design, and it is exactly what RadMail does** — `draft_reply` returns text a person reviews and sends, and the hosted tier lists no send tool at all.
+
+For five classes RadMail does something stricter, and the reason is the whole product: **money, changed banking, first contact, a decision, and prompt-injection get no draft at all.** On a wire-change thread a draft is not a safeguard — it is the last mile of the attack. Business email compromise does not fail at the send button; it succeeds at the approval button, by putting a plausible, well-written reply in front of a busy person who only has to say yes. Handing that person a pre-written answer makes approving *easier than reading*. So RadMail withholds the draft and hands over the message and the signals instead, and the person writes the reply.
+
+Both halves are verifiable by execution, with no account — run these two commands and compare:
+
+```bash
+# Ordinary mail: a draft comes back.
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"draft_reply","arguments":{"from":"sam@client.example","subject":"Re: the deck","body":"Can you send me the updated deck by Thursday?","knownSender":true}}}' | npx -y radmail-mcp
+
+# A banking change: no draft comes back.
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"draft_reply","arguments":{"from":"cfo@vendor.example","subject":"Updated wire instructions","body":"Our bank details changed. Remit the $48,200 to the new account by Friday.","knownSender":true}}}' | npx -y radmail-mcp
+```
+
+Both commands were run verbatim against the published package on **2026-10-14**. The first returns a draft plus `"mcpEnforcement": "No hard-stop. Still a DRAFT — the MCP surface never sends mail."` The second returns `"draft": null`, `"hardStop": "changed-banking"`, and `"mcpEnforcement": "HARD-STOP (changed-banking). No draft offered — human-only forever (BEC defense)."` Note what the second one still gives you: the extracted commitment and the reason, taint-tagged — the withheld thing is the *proposed reply*, not the information.
+
+The five classes are published as `draftRefusalClasses` in [the contract](https://radmail.ai/.well-known/agent-safety.json), and the refusal is a one-way ratchet: it may be tightened, never loosened.
+
+**The cost, stated plainly.** This is a worse experience on precisely the mail you most want handled for you. If a wire-change notice lands at 2am and you wanted a reply waiting, RadMail will have nothing for you to approve — by design. That trade *is* the product. If what you need is a reply ready to approve on every thread including the ones that move money, a draft-and-approve server is the right tool and this is the wrong one.
+
 ## Start in one call
 
 Call `triage_inbox` and **omit the token** — RadMail auto-provisions a free sandbox tenant and returns a working triage in one round-trip. Reuse the returned token. (On the zero-auth hosted sandbox, `triage_inbox` takes no args — it triages a built-in demo inbox so your very first call returns the full wedge.)

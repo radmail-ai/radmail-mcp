@@ -2,6 +2,14 @@
 
 ## 0.5.1 (unreleased)
 
+- **Docs:** the README and `llms.txt` now answer the draft-vs-refusal question this
+  category argues about, at the top rather than in an appendix: `draft_reply` returns a
+  draft for ordinary mail, and returns no draft at all for the five hard-stop classes,
+  because on a wire-change thread a pre-written reply makes approving easier than
+  reading. Two `npx -y radmail-mcp` one-liners let an evaluator reproduce both outcomes
+  with no account; both were run verbatim against the published package on 2026-10-14.
+  States the cost of the position explicitly: if you need a reply ready to approve on
+  every thread, a draft-and-approve server is the right tool and RadMail is not.
 - **Packaging:** the npm tarball now ships only the runtime build (`dist/src`, without
   compiled tests or source maps), `README.md`, `LICENSE` and this changelog. Tests,
   scripts, TypeScript sources and the vendorable engine bundle are no longer published.
