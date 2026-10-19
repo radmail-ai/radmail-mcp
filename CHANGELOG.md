@@ -2,6 +2,19 @@
 
 ## 0.5.1 (unreleased)
 
+- **Docs:** the README and `llms.txt` now reconcile the contract's own arithmetic before an
+  auditor has to guess — the published contract's `forbiddenActions` is 3 while the
+  hard-stopped classes are 5, because the five are filed under two keys
+  (`forbiddenActions` + `draftRefusalClasses`) — and name the second, code-pinned copy of
+  the contract in this repo, which has an older shape and no `enforcementModel`, so a
+  disagreement between the two copies reads as a named gap rather than as a lie.
+- **Docs:** answers the money-safety checklist published audits grade money-moving MCP
+  servers by (configurable spending budget · documented human-approval step · velocity
+  limit). Two of the three are *not applicable* by construction, with a no-account way to
+  reproduce that rather than take it on trust; the third applies and is stricter than the
+  field expects. States the cost: RadMail cannot pay an invoice and will not acquire the
+  ability to.
+
 - **Docs:** the README and `llms.txt` now answer the draft-vs-refusal question this
   category argues about, at the top rather than in an appendix: `draft_reply` returns a
   draft for ordinary mail, and returns no draft at all for the five hard-stop classes,

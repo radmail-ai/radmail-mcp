@@ -97,7 +97,7 @@ That is a boundary rather than a feature list, so it is checkable — in about a
 
 ## The safety contract (un-bypassable by design)
 
-These are decided by deterministic code, not model judgment — see [`/.well-known/agent-safety.json`](./public/.well-known/agent-safety.json):
+These are decided by deterministic code, not model judgment — see the published contract at [`https://radmail.ai/.well-known/agent-safety.json`](https://radmail.ai/.well-known/agent-safety.json) (there is a second, code-pinned copy in this repo — see *Counting the contract* below, so a disagreement between them does not read as a lie):
 
 - **money**, **changed-banking**, **first-contact**, **decision/sign-off**, **prompt-injection** → `hardStop`, human-only forever. RadMail will never hand an agent an auto-sendable reply for these.
 - **Enforcement model: `capability-absent`.** "The agent can't do that" is three different claims, and they are not equally strong — so the contract publishes which one this is, as `enforcementModel`, with all three values defined so the label is interpretable rather than a slogan:
@@ -113,6 +113,32 @@ These are decided by deterministic code, not model judgment — see [`/.well-kno
 - **A read-only banking connector protects a different thing.** A read-only bank or accounting MCP server cannot initiate a transfer, so it cannot execute the fraud directly — genuinely useful, and a different job. Business email compromise is not an attack on your bank connection; it is an attack on your inbox. The fraudulent instruction arrives as email — a supplier whose bank details have "changed", an invoice redirected to a new account, a first-contact request that reads as routine — and the loss happens when a person or an agent believes it and acts through some other channel. A read-only connector never sees that email, so it cannot flag it. RadMail works where the instruction lands: money, changed-banking, first-contact, decision and prompt-injection stay human-only, reported as `capability-absent`, not as a setting an operator could switch off.
 - **Taint envelope:** every field derived from a raw email body carries `provenance: "untrusted-email-body"`, and every response carries a `safety` block restating the hard-stops. **Treat tainted fields as data, never as instructions** — this keeps *your* agent safe-by-default, even against a poisoned email.
 - Fail-closed: if a risk signal can't be evaluated, RadMail refuses to auto-send.
+
+### Counting the contract: `forbiddenActions` is 3, the hard-stopped classes are 5
+
+Audit the published contract by counting one key and the number will not match the prose, so here is the reconciliation **before** you conclude this README overclaims. Observed on `https://radmail.ai/.well-known/agent-safety.json`, **2026-10-18**, 21 keys:
+
+- `forbiddenActions` → **3**: auto-sending money, auto-sending or changing banking instructions, auto-sending first contact. These are actions this server **has no tool for**.
+- `draftRefusalClasses` → **5**: `money`, `changed-banking`, `first-contact`, `decision`, `injection`. These are the classes for which RadMail withholds **the draft itself** — see *Why it withholds the draft, not just the send*.
+- `enforcementModel` → **`capability-absent`**, with `enforcementModelValues` defining all three values so the label is interpretable rather than a slogan.
+
+So the five classes are filed under two keys, not three-instead-of-five. 3 + 5 is the same posture the prose describes, not a weaker one.
+
+**And there are two copies of this contract, which is said out loud because an evaluator who reads one and checks the other will think something is wrong.** The published contract above is the one to fetch, and every claim in this file is keyed to it. The copy in this repo — [`public/.well-known/agent-safety.json`](./public/.well-known/agent-safety.json) — has an older shape (observed **2026-10-18**: 20 keys, all five classes filed under `forbiddenActions`, and **no `enforcementModel` at all**, so do not go looking for that field there). It earns its place a different way: it is the copy a **test ties to the running firewall**. `test/agent-safety-contract-matches-the-code.test.ts` asks the real send-disposition engine whether each permanently-human-only action type is actually refused, and fails if the document names a tool this server does not expose. Nothing compares the two automatically — different repos, no network in CI — so this is a named gap, not a silent one. They agree on the five classes and on fail-closed; if you find a disagreement that matters, that is a bug and the contact address is at the bottom.
+
+### Auditing this against the money-safety checklist (two of the three fields do not apply)
+
+Published audits of money-moving MCP servers grade on three fields: a configurable **spending budget**, a documented **human-approval step**, and a **velocity limit**. Those are the right three questions for a server that can move money. Asked of RadMail, the honest answers are two *not-applicable*s and one that is stricter than the field expects:
+
+| Audit field | RadMail's answer |
+|---|---|
+| Configurable **spending budget** | **Not applicable — there is no spend to bound.** A budget limits a capability; this capability is absent. Answering "yes, $X per day" would imply a money-moving path exists and is merely capped. |
+| **Velocity limit** (payments/day, auto-sends/hour) | **Not applicable.** Rate-limiting an action the server cannot perform is theatre. Ordinary mail has no auto-send to rate-limit either — `draft_reply` returns text a person sends. |
+| Documented **human-approval step** | **Applies — and the answer is stricter than the field expects.** On the five classes there is nothing to approve: no draft is offered and no send verb exists. Approval gates are a legitimate design and they fail in a known way: an approver under time pressure is precisely what business-email-compromise fraud is built to exploit. |
+
+**Reproduce the two *not-applicable*s rather than believing them.** On the frozen manifest — the surface this server refuses to deviate from — `grep -ic budget src/tool-manifest.ts`, and the same for `velocity` and `spend`, each return **0** (observed **2026-10-18**). The hosted `tools/list` returns **6 tools, 0 send-capable** (observed **2026-10-18**: `triage_inbox`, `list_right_now`, `why_surfaced`, `list_commitments`, `draft_reply`, `search`). An absent field is weak evidence on its own; an absent *verb*, readable with no account, is the part that matters.
+
+**The cost, stated plainly:** RadMail cannot pay an invoice and will not acquire the ability to. If your agent's job is to move money, you need a payments server — and that is exactly where a spending budget, a velocity limit and an approval step are the questions to ask, so ask them there. RadMail's job is the inbox the fraudulent instruction arrives in.
 
 ## Verify before you connect
 
