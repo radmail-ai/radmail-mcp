@@ -2,6 +2,18 @@
 
 ## 0.5.1 (unreleased)
 
+- **Docs:** publishes the no-account way to reproduce the *explainability* claim itself,
+  and the one argument name this README had named `why_surfaced` three times without ever
+  writing down. Two `curl`s against the hosted zero-auth sandbox (`list_right_now` for an
+  id, then `why_surfaced` with `message_id`) return six named scoring signals plus the
+  base number they move; three consecutive calls on 2026-10-19 returned byte-identical
+  433-byte payloads (sha256 published), which is what "not a black box" is being used to
+  mean — an explanation that repeats can be diffed and pinned in a test. Also publishes
+  the deliberate per-tier difference in the argument shape (hosted sandbox takes
+  `message_id` into a fixed demo inbox; the local stdio package takes the message object,
+  because it has no inbox of its own) and the exact error the camelCase guess returns, so
+  the convention is read rather than discovered.
+
 - **Docs:** the README and `llms.txt` now reconcile the contract's own arithmetic before an
   auditor has to guess — the published contract's `forbiddenActions` is 3 while the
   hard-stopped classes are 5, because the five are filed under two keys

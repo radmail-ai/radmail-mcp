@@ -176,6 +176,39 @@ echo 'export const RELEASE_PATH = "/api/v1/sends/confirm";' >> src/lib/send.ts
 
 — and re-run the command above: the second assertion fails and the suite exits non-zero. Then `git checkout src/lib/send.ts` to put it back. RadMail publishes the falsification step rather than asking you to assume the check is real.
 
+### Reproducing the explanation itself — and the argument name this README never published
+
+`why_surfaced` is the claim that the ranking is explainable rather than a score with a story attached. It is named three times above and its one argument was never written down, so until now the fastest way to check the claim had to be guessed at. Two commands, no account, no key:
+
+```bash
+# 1. get an id out of the demo inbox
+curl -s -X POST https://radmail.ai/api/mcp/sandbox \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_right_now","arguments":{}}}'
+
+# 2. ask why that one surfaced — the argument is message_id (snake_case)
+curl -s -X POST https://radmail.ai/api/mcp/sandbox \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"why_surfaced","arguments":{"message_id":"m_001"}}}'
+```
+
+Observed **2026-10-19** — six named signals and the base number they move, not a sentence:
+
+```
+Why "Re: PO-4471 — confirm revised delivery window" [m_001] scored importance 94 x urgency 94:
+
+  • sender is a known counterparty (base importance 78)
+  • you owe an open commitment on this thread
+  • arrived in the last few hours
+  • explicit same-day deadline language
+  • an explicit confirmation is requested
+  • a commitment on this thread is due soon
+```
+
+**And the part worth measuring instead of asserting: the same input returned the same bytes.** Three consecutive calls on **2026-10-19** returned byte-identical 433-byte payloads — `sha256 e0eebdcf46ae7aada7abc0ac41e5a48608773026252fd49a511f07f5d8cb549c`. That is what *"not a black box"* is being used to mean here: the signals are the scoring inputs read back, so an explanation can be diffed, pinned in a test, and shown to a person who disagrees with the rank. An explanation written by a model narrating its own guess is a legitimate design and often reads better — but two identical calls to it need not agree, and what does not repeat cannot be diffed. Re-run the commands rather than trusting this paragraph, and scope the claim the way it is scoped here: this is the **heuristic sandbox tier**, which is the part you can check with no account.
+
+**The two tiers take the argument differently, and that is by design, not drift.** The hosted sandbox serves a fixed demo inbox, so `why_surfaced` there takes `message_id` — ids `m_001`–`m_006`, and `list_right_now` prints them in brackets. The local stdio package has no inbox of its own (you pass it your own messages), so there `why_surfaced` takes the **message object** — `from` and `body`, optionally `knownSender` / `hasReply` / `receivedAt` / `subject` — the same shape as `triage`. Measured on the hosted tier 2026-10-19: the camelCase guess `{"messageId":"m_001"}` does not fail silently, it answers `No demo message with id "". Pass a message_id from triage_inbox (available ids: m_001, m_002, m_003, m_004, m_005, m_006).` — which is the list you needed. Published here so the convention is read rather than discovered.
+
 ## Connect
 
 **Fastest — zero-auth hosted sandbox** (no install, no key, no signup). Point any MCP client at the streamable-HTTP endpoint:
