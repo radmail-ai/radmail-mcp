@@ -20,6 +20,7 @@ import {
   analyzeSpf,
   applySpfRedirect,
   findDmarcRecord,
+  findDmarcRecords,
   dmarcPolicy,
   analyzeDmarc,
   classifyDkimTxt,
@@ -181,6 +182,85 @@ test("DMARC: v=DMARC1 with no p= tag is invalid → fail; finder ports parseDmar
   assert.equal(analyzeDmarc(["v=DMARC1; rua=mailto:d@x.example"]).verdict, "fail");
   assert.equal(findDmarcRecord(["other", "  v=dmarc1; p=none  "]), "v=dmarc1; p=none");
   assert.equal(dmarcPolicy("v=DMARC1; p = Quarantine ;"), "quarantine");
+});
+
+// ─── DMARC: MULTIPLE RECORDS = NO DMARC (RFC 7489 6.6.3) ────────────────────
+//
+// Found 2026-10-21 on a live domain in our own fleet. The SPF side of this tool has
+// always counted its records and failed on >1; the DMARC side read only the FIRST. That
+// domain's first record is the STRICTER one, so the tool graded it "warn" and advised
+// ratcheting to p=quarantine — a policy already published and already void. A tier read
+// off one of several records does not understate the problem, it inverts it.
+
+// The real pair's SHAPE, with the domain and rua addresses de-identified: this repo is
+// public, naming a live unprotected domain would be an invitation, and the real `mailto:`
+// values tripped the tracked-file denylist gate. Structure is what the test needs — a
+// registrar-added default record beside a hand-written one, each naming a policy.
+const DUPLICATE_DMARC_PAIR = [
+  "v=DMARC1; p=quarantine; adkim=r; aspf=r; rua=mailto:dmarc@registrar.example;",
+  "v=DMARC1; p=none; rua=mailto:dmarc@owner.example; pct=100; adkim=r; aspf=r",
+];
+
+test("DMARC: a real duplicate pair fails, counts 2, and reports NO policy", () => {
+  const d = analyzeDmarc(DUPLICATE_DMARC_PAIR);
+  assert.equal(d.recordCount, 2);
+  assert.equal(d.verdict, "fail", "two records means no DMARC — not a pass off the first one");
+  assert.equal(d.policy, null, "publishing a tier receivers never apply must not surface as a policy");
+  assert.equal(d.subdomainPolicy, null);
+  assert.equal(d.pct, null);
+  assert.equal(d.hasRua, true, "a rua on either record still means reports were requested");
+  assert.ok(d.record!.includes("|"), "both records are preserved for the reader, like the SPF branch");
+});
+
+test("DMARC: the old first-record-wins path would have graded this PASS", () => {
+  // Kept as a regression witness: findDmarcRecord is still exported and still returns
+  // the first record, which is exactly why a verdict must never be built on it.
+  const first = findDmarcRecord(DUPLICATE_DMARC_PAIR);
+  assert.match(first!, /p=quarantine/);
+  assert.equal(dmarcPolicy(first!), "quarantine");
+});
+
+test("DMARC: duplicate advice says DELETE, and does not fire the no-p=-tag advice", () => {
+  const dmarc = analyzeDmarc(DUPLICATE_DMARC_PAIR);
+  const advice = buildAdvice(analyzeSpf(["v=spf1 -all"]), dmarc, { verdict: "none", selectorsProbed: [], selectorsFound: [], wildcardSuspected: false }, false);
+  const dup = advice.find((a) => a.includes("MULTIPLE DMARC"));
+  assert.ok(dup, "the duplicate must be named in plain language");
+  assert.match(dup!, /\(2\)/);
+  assert.match(dup!, /NO DMARC/);
+  assert.match(dup!, /DELETION, not an edit/);
+  assert.ok(
+    !advice.some((a) => a.includes("no valid p= policy tag")),
+    "that advice means a DIFFERENT fail (bad syntax) — emitting it here sends the reader to edit, not delete",
+  );
+  assert.ok(
+    !advice.some((a) => a.includes("ratchet to p=quarantine")),
+    "never advise ratcheting a policy that is not in effect — this was the original wrong answer",
+  );
+});
+
+test("DMARC: a single record is unchanged — recordCount 1, verdicts as before", () => {
+  for (const [rec, verdict] of [
+    ["v=DMARC1; p=reject", "pass"],
+    ["v=DMARC1; p=quarantine; rua=mailto:d@x.example", "pass"],
+    ["v=DMARC1; p=none", "warn"],
+    ["v=DMARC1; rua=mailto:d@x.example", "fail"],
+  ] as const) {
+    const d = analyzeDmarc([rec]);
+    assert.equal(d.recordCount, 1, rec);
+    assert.equal(d.verdict, verdict, rec);
+  }
+  assert.equal(analyzeDmarc([]).recordCount, 0);
+  assert.equal(analyzeDmarc(["unrelated=txt"]).recordCount, 0);
+});
+
+test("findDmarcRecords: counts every record, tolerates case and padding, ignores lookalikes", () => {
+  assert.equal(findDmarcRecords(DUPLICATE_DMARC_PAIR).length, 2);
+  assert.equal(findDmarcRecords(["  V=DMARC1; p=none  ", "v=dmarc1;p=reject"]).length, 2);
+  assert.equal(findDmarcRecords(["v=spf1 -all", "unrelated=txt"]).length, 0);
+  assert.equal(findDmarcRecords([]).length, 0);
+  // A record that merely MENTIONS the version string is not a DMARC record.
+  assert.equal(findDmarcRecords(["verification=v=DMARC1"]).length, 0);
+  assert.equal(findDmarcRecords(["v=DMARC1x; p=none"]).length, 0, "must anchor on the full token");
 });
 
 // ─── DKIM pure logic ─────────────────────────────────────────────────────────
@@ -540,4 +620,21 @@ test("NEGATIVE CONTROL: clean ENOTFOUND on every selector is an ANSWER, not a fa
   const h = await checkDomainHealth(DOMAIN);
   assert.equal(h.lookupFailures, false, "ENOTFOUND is an answer — must not read as a failure");
   assert.equal(h.dkim.verdict, "warn");
+});
+
+
+test("checkDomainHealth: a domain publishing two DMARC records reports fail + count, not a policy", async () => {
+  // The whole-tool shape of the bug: before the fix this returned
+  // verdict "pass" with policy "quarantine" over a domain with no DMARC at all.
+  __setDnsForTests(
+    fakeDns({
+      [DOMAIN]: ["v=spf1 -all"],
+      [`_dmarc.${DOMAIN}`]: DUPLICATE_DMARC_PAIR,
+    }),
+  );
+  const h = await checkDomainHealth(DOMAIN);
+  assert.equal(h.dmarc.verdict, "fail");
+  assert.equal(h.dmarc.recordCount, 2);
+  assert.equal(h.dmarc.policy, null);
+  assert.ok(h.advice.some((a) => a.includes("MULTIPLE DMARC")));
 });
