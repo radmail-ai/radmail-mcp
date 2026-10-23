@@ -2,6 +2,18 @@
 
 ## 0.5.1 (unreleased)
 
+- **Docs:** cites the first *independent* grade of this server's tool surface — AxioRank's MCP
+  Security Index scorecard (grade **A**, blast radius **0/100**, 6 tools, 0 capabilities
+  flagged, Execute/Delete/Write/Read = 0/0/0/6), read 2026-10-22 — on a page RadMail does not
+  own, never submitted to and cannot edit, with AxioRank's own caveats quoted verbatim ("not
+  whether it is secure or trustworthy"; "a minimal grade means a small blast radius, not an
+  endorsement"). Also names the `high` advisory shown on that same page rather than linking
+  the grade and skipping the red word: it is a keyword match on the single occurrence of
+  `RADMAIL_API_KEY` in the **description** of `search` (measured over the whole hosted
+  `tools/list` payload: `api_key` 1, `token`/`credential`/`secret`/`password` 0 each), which
+  is a sentence *about* a key and not a tool that handles one. The sentence stays; the count
+  gets published.
+
 - **Docs:** publishes the no-account way to reproduce the *explainability* claim itself,
   and the one argument name this README had named `why_surfaced` three times without ever
   writing down. Two `curl`s against the hosted zero-auth sandbox (`list_right_now` for an

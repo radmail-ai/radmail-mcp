@@ -209,6 +209,43 @@ Why "Re: PO-4471 — confirm revised delivery window" [m_001] scored importance 
 
 **The two tiers take the argument differently, and that is by design, not drift.** The hosted sandbox serves a fixed demo inbox, so `why_surfaced` there takes `message_id` — ids `m_001`–`m_006`, and `list_right_now` prints them in brackets. The local stdio package has no inbox of its own (you pass it your own messages), so there `why_surfaced` takes the **message object** — `from` and `body`, optionally `knownSender` / `hasReply` / `receivedAt` / `subject` — the same shape as `triage`. Measured on the hosted tier 2026-10-19: the camelCase guess `{"messageId":"m_001"}` does not fail silently, it answers `No demo message with id "". Pass a message_id from triage_inbox (available ids: m_001, m_002, m_003, m_004, m_005, m_006).` — which is the list you needed. Published here so the convention is read rather than discovered.
 
+### An independent grade of this server — one we did not ask for and do not control
+
+Everything above this line is RadMail checking RadMail. A reader is right to discount it. So here is the same claim measured by someone else, on a page RadMail does not own, cannot edit, and never submitted to:
+
+[![AxioRank MCP Security Index grade for radmail-mcp](https://axiorank.com/api/badge/mcp/ai-radmail-radmail-mcp.svg)](https://axiorank.com/mcp-index/ai-radmail-radmail-mcp)
+
+AxioRank's MCP Security Index crawls a server's declared tool surface and grades its **blast radius** — "the most powerful thing each of its tools can do." Its scorecard for this server, read **2026-10-22**:
+
+| what AxioRank measured | its value |
+|---|---|
+| Grade | **A** — "a minimal exposure" |
+| Blast radius | **0 / 100** |
+| Tools found | 6 |
+| Capabilities flagged | **0** |
+| Execute · Delete · Write · Read | **0 · 0 · 0 · 6** |
+
+In its own words: *"radmail-mcp declares no high-impact capabilities that AxioRank flags."*
+
+**And the caveat matters more than the grade, so here it is verbatim rather than paraphrased:** *"The grade reflects the blast radius of what radmail-mcp declares it can do, read-only, not whether it is secure or trustworthy, and not a judgment of the vendor."* And: *"A minimal grade means a small blast radius, not an endorsement."* That is the correct reading. A zero blast radius says the dangerous verbs are **absent from the declared surface** — which is exactly the claim the `capability-absent` row makes and exactly what the `tools/list` command above lets you re-derive yourself in one call. It does not say the code is well written, and it is not a security audit.
+
+RadMail has no relationship with AxioRank, did not request the listing, and cannot change what it says. The badge above is served live by them, so it moves if their grade moves — including downward. That is the point of citing it.
+
+#### The `high` advisory on that page, and the one keyword that causes it
+
+That same scorecard shows an **Advisory: `high` — "Credential / secret access capability."** It would be dishonest to link the grade and skip the red word next to it, so: AxioRank labels that block *"Keyword matches in tool descriptions and schemas… shown for transparency and are not part of the grade"* — and the keyword it matched is one this README can name, because it was measured rather than guessed.
+
+```bash
+curl -s -X POST https://radmail.ai/api/mcp/sandbox \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | grep -o RADMAIL_API_KEY
+```
+
+Counted over that whole payload on **2026-10-22**: `api_key` **1**, and `token` · `credential` · `secret` · `password` **0 each**. The single hit is inside the **description** of `search`, where it explains the connected-mode upgrade: run the local package with `RADMAIL_API_KEY` set and the same tool reads your real inbox instead of the demo one. A keyword scanner reading tool prose cannot tell a sentence *about* a key from a tool that *handles* one — and this is the former. There is no tool here that reads, writes, stores, or forwards a credential; the same scorecard's own capability count says so on the line above (Read 6, everything else 0).
+
+The honest shape of it: **the advisory is a true statement about our text and a false impression about our surface.** We are not going to delete the sentence that tells an operator how to connect their real inbox in order to make a keyword scanner happier — we would rather publish the arithmetic and let you run the `grep`.
+
+
 ## Connect
 
 **Fastest — zero-auth hosted sandbox** (no install, no key, no signup). Point any MCP client at the streamable-HTTP endpoint:
