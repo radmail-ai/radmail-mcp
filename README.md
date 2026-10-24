@@ -140,6 +140,22 @@ Published audits of money-moving MCP servers grade on three fields: a configurab
 
 **The cost, stated plainly:** RadMail cannot pay an invoice and will not acquire the ability to. If your agent's job is to move money, you need a payments server — and that is exactly where a spending budget, a velocity limit and an approval step are the questions to ask, so ask them there. RadMail's job is the inbox the fraudulent instruction arrives in.
 
+### Auditing this against the BEC control checklist the security category publishes (three of the five are someone else's job)
+
+Ask the email-security category how to stop business email compromise and the published guidance converges on five controls. Asked of RadMail the honest answers are **one stricter than the field expects, one partial, and three flat no**s — because RadMail and an email-security gateway solve different halves of the same problem, and conflating them is how a buyer ends up unprotected.
+
+| Published BEC control | RadMail's answer |
+|---|---|
+| **A second authorized reviewer** on wires, payroll changes and vendor-bank changes — an approval that urgency or seniority cannot waive | **Applies, and is stricter than the field expects.** For an agent there is no approval request to waive, because there is no tool: `money` and `changed-banking` are `capability-absent`, and RadMail withholds the *draft* too, so there is nothing pre-written to say yes to. The reviewer is the only author. |
+| **Out-of-band callback verification** to a previously known-good number | **Not implemented, and RadMail will not acquire it.** RadMail places no calls and holds no vendor contact-of-record, so it cannot confirm a changed account through a second channel. What the hard-stop buys is the *pause in which a person makes that call* — it does not make the call, and reading it as if it did would be the dangerous misreading. |
+| **Authentication of the sending infrastructure** (SPF / DKIM / DMARC) | **Partially — and narrower than the name suggests.** `check_send_domain` is a zero-auth, read-only DNS read of SPF / DKIM / DMARC for a domain *you name*, probing the common selectors. It is **not** per-message header authentication of received mail, it does not evaluate alignment on a specific message, and it cannot act on the answer. |
+| **Impersonation / behavioural-anomaly detection on inbound mail** | **No. This is not an email-security product.** RadMail scores importance × urgency and flags the five hard-stop classes on messages that have *already reached the inbox*. It does not model sender relationships to decide whether a message is forged, and it should not be bought instead of something that does. |
+| **Automated remediation** — quarantine, clawback, incident clustering | **No, by the same construction as everything else.** The hosted surface is 6 tools, read/triage/draft only; nothing moves, deletes or quarantines mail. |
+
+**Reproduce the three *no*s rather than believing them.** On the frozen manifest — the surface this server refuses to deviate from — `grep -ic quarantine src/tool-manifest.ts` and the same for `delete` and `archive` each return **0**, and `grep -ic send` returns **1**: the noun inside `check_send_domain`, a read-only DNS lookup. The hosted `tools/list` returns **6 tools, 0 send-capable** (observed **2026-10-23**: `triage_inbox`, `list_right_now`, `why_surfaced`, `list_commitments`, `draft_reply`, `search`).
+
+**The two halves, stated so nobody buys the wrong one.** A BEC gateway defends the mailbox against the attacker's *message* — filtering, authentication, impersonation modelling, quarantine. RadMail constrains what an **agent** may do with the mailbox once a message is in it. Those are not competing claims: a gateway that stops almost everything still passes the message it has not seen before, and in 2026 what increasingly stands at the other end of that message is an autonomous process with send rights and no instinct for a changed bank account. **If you have no inbound email security, RadMail is not a substitute and you should buy one.** If you have one and you are also handing an agent the inbox, the gateway has nothing to say about what the agent does next — that is the row RadMail is on.
+
 ## Verify before you connect
 
 The safety contract is **machine-verifiable** — fetch it and check it in one command, no account, no key:

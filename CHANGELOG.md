@@ -2,6 +2,19 @@
 
 ## 0.5.1 (unreleased)
 
+- **Docs:** answers the **BEC control checklist the email-security category publishes**, in that
+  category's own vocabulary, and gives three of its five controls a flat *no*. Second authorized
+  reviewer on wires / payroll / vendor-bank changes: **applies and is stricter** (no approval request
+  exists to waive, and the draft is withheld too). Out-of-band callback verification to a known-good
+  number: **not implemented and will not be** — the hard-stop buys the pause in which a person makes
+  that call, it does not make the call. SPF/DKIM/DMARC authentication: **partial** — `check_send_domain`
+  is a zero-auth read-only DNS read for a domain you name, not per-message header authentication of
+  received mail. Impersonation detection and automated remediation/quarantine: **no — this is not an
+  email-security product, and if you have no inbound gateway RadMail is not a substitute.** Reproducible
+  on the frozen manifest: `quarantine` / `delete` / `archive` each `grep -ic` to 0 and `send` to 1 (the
+  noun inside `check_send_domain`); hosted `tools/list` 6 tools / 0 send-capable, observed 2026-10-23.
+  Mirrored in `llms.txt`.
+
 - **Docs:** cites the first *independent* grade of this server's tool surface — AxioRank's MCP
   Security Index scorecard (grade **A**, blast radius **0/100**, 6 tools, 0 capabilities
   flagged, Execute/Delete/Write/Read = 0/0/0/6), read 2026-10-22 — on a page RadMail does not
