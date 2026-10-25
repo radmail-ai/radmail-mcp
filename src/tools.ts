@@ -1789,9 +1789,15 @@ export async function sendEmailTool(args: {
   const note =
     result.outcome === "sent"
       ? "Sent by RadMail's gate from the owner's mailbox."
-      : result.outcome === "held"
-        ? "HELD for the owner. Nothing was sent, and no tool can release it — the owner opens reviewUrl in RadMail and releases or discards it. Tell the owner it is waiting."
-        : "Not sent and not held. Read `detail`; do not retry blindly.";
+      : result.outcome !== "held"
+        ? "Not sent and not held. Read `detail`; do not retry blindly."
+        : result.handoff === true
+          ? "HANDED TO A PERSON. Nothing was sent, and nobody can release this in RadMail — it is mail only a person may send " +
+            "(see handoffClasses). Tell the owner to open reviewUrl, copy the draft and send it themselves from their own mail, " +
+            "then mark it handed off there. Do not tell them to release it."
+          : result.handoff === false
+            ? "HELD for the owner. Nothing was sent, and no tool can release it — the owner opens reviewUrl in RadMail and releases or discards it. Tell the owner it is waiting."
+            : "HELD. Nothing was sent, and no tool can release it. Tell the owner to open reviewUrl: the page says whether they release it there or send it themselves from their own mail.";
   return withSafety({ ...result, note });
 }
 
@@ -1801,8 +1807,9 @@ export const SEND_TOOL_DEF: ToolDef = {
     "Send an email from the owner's connected mailbox through RadMail's outbound gate. Returns outcome sent | held | refused. " +
     "RadMail decides, not you: mail to the owner's own team or an established two-way contact may go at once; everything else is HELD " +
     "for the owner to release in the RadMail app (a held result carries reviewUrl, never a token). This tool cannot release a hold and " +
-    "neither can any other. Money / changed-banking / first-contact / decision / injection content and regulator / government / court / " +
-    "bank recipients always hold. BEFORE using this for any recipient outside the owner's own team, run your correspondence-guard " +
+    "neither can any other. Regulator / government / court / bank recipients always hold. Money / changed-banking / first-contact / " +
+    "decision / injection content comes back held with handoff: true — nobody releases it in RadMail; a person copies the draft and " +
+    "sends it from their own mail, so tell the owner that, never to release it. BEFORE using this for any recipient outside the owner's own team, run your correspondence-guard " +
     "review on the exact text you will send (register, machine-written tells, threading, promises) and send only what it passes. " +
     "Reply on the real thread: pass inReplyTo for a reply rather than a new message with Re: in the subject. Opt-in: present only on " +
     "a local server with RADMAIL_SEND_TOOL=1; needs a send-scoped RADMAIL_SEND_API_KEY.",

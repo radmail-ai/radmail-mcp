@@ -13,7 +13,12 @@
 // app. This client can only report which of three things happened:
 //
 //   sent     — RadMail's gate released it; it left the owner's mailbox.
-//   held     — waiting for the owner. We hand back a link to the app page.
+//   held     — waiting for a person. We hand back a link to the app page.
+//              `handoff: true` means a HUMAN-ONLY hold (money, changed banking,
+//              a decision, injected instructions, a first message to someone
+//              new): nobody releases it in RadMail; a person copies the draft
+//              and sends it from their own mail. `handoff: null` = not known
+//              (a duplicate of an earlier hold — the app page says which).
 //   refused  — not sent and not held (bad input, switched off, no key, …).
 //
 // ── WHAT THIS FILE MUST NEVER DO ────────────────────────────────────────────
@@ -81,6 +86,8 @@ export type SendOutcome =
       holdReasons: string[];
       reviewUrl: string;
       expiresAt: string | null;
+      handoff: boolean | null;
+      handoffClasses: string[];
       duplicate: boolean;
     }
   | {
@@ -109,6 +116,11 @@ export function reviewUrlFor(apiUrl: string, reviewPath: unknown): string {
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
+
+/** The human-only classes RadMail names on a hand-off. Copied by NAME, never passed through. */
+export const HANDOFF_CLASSES = ["money", "changed-banking", "decision", "first-contact", "injection"] as const;
+const handoffClassList = (v: unknown): string[] =>
+  Array.isArray(v) ? HANDOFF_CLASSES.filter((c) => v.includes(c)) : [];
 const strList = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 20) : [];
 
@@ -141,6 +153,8 @@ export function mapSendResponse(status: number, body: Record<string, unknown> | 
       holdReasons: strList(b.holdReasons),
       reviewUrl: reviewUrlFor(apiUrl, b.reviewPath),
       expiresAt: str(b.expiresAt),
+      handoff: b.handoff === true,
+      handoffClasses: b.handoff === true ? handoffClassList(b.handoffClasses) : [],
       duplicate: false,
     };
   }
@@ -159,7 +173,19 @@ export function mapSendResponse(status: number, body: Record<string, unknown> | 
         holdReasons: [],
         reviewUrl: reviewUrlFor(apiUrl, requestId ? `/sends/${requestId}` : null),
         expiresAt: null,
+        handoff: null,
+        handoffClasses: [],
         duplicate: true,
+      };
+    }
+    if (prior === "handed_off") {
+      return {
+        outcome: "refused",
+        httpStatus: status,
+        error: "duplicate_of_handed_off",
+        detail:
+          "An identical request was already handed to a person to send from their own mail. RadMail did not send it " +
+          "and will not; nothing was re-sent. Do not submit it again.",
       };
     }
     return {
