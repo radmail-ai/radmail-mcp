@@ -225,6 +225,87 @@ export async function getEmail(id: string, cfg: ConnectedConfig): Promise<Remote
   return (body.data as RemoteEmailDetail | undefined) ?? null;
 }
 
+/** One attachment's bytes from GET /api/v1/emails/{id}/attachments/{index}. */
+export interface RemoteAttachment {
+  bytes: Buffer;
+  /** From Content-Disposition. UNTRUSTED: the sender chose it. */
+  filename: string | null;
+  contentType: string | null;
+}
+
+/** A refusal the server explained (403/404/409/413/501…). The code and message are the server's own. */
+export interface RemoteAttachmentRefusal {
+  refused: true;
+  status: number;
+  error: string;
+  message: string;
+}
+
+function filenameFromDisposition(h: string | null): string | null {
+  if (!h) return null;
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(h);
+  if (star) {
+    try {
+      return decodeURIComponent(star[1].trim());
+    } catch {
+      /* fall through to the plain form */
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(h);
+  return plain ? plain[1].trim() : null;
+}
+
+/**
+ * GET /api/v1/emails/{id}/attachments/{index} — one attachment's bytes, which
+ * the RadMail server fetches from the mail provider for this request and does
+ * not store. Every gate is the server's (attachments:read + mailbox-confined
+ * key, sender allowlist, regime, size cap); a refusal comes back as a
+ * RemoteAttachmentRefusal carrying the server's own reason, never as bytes.
+ * 401 and network/timeout failures throw ConnectedApiError like every other read.
+ */
+export async function getAttachment(
+  id: string,
+  index: number,
+  cfg: ConnectedConfig,
+): Promise<RemoteAttachment | RemoteAttachmentRefusal> {
+  const path = `/api/v1/emails/${encodeURIComponent(id)}/attachments/${index}`;
+  let res: Response;
+  try {
+    res = await fetchOnce(`${cfg.apiUrl}${path}`, cfg.apiKey);
+  } catch (e) {
+    if (isAbortError(e)) {
+      throw new ConnectedApiError("timeout", `The RadMail API did not respond within ${TIMEOUT_MS / 1000}s (GET ${path}). Nothing was fetched.`);
+    }
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new ConnectedApiError("network", `Could not reach the RadMail API at ${cfg.apiUrl} (${detail}). Nothing was fetched.`);
+  }
+  if (res.status === 401) {
+    throw new ConnectedApiError(
+      "auth",
+      `RadMail API key rejected (401): the key is invalid, revoked, or mistyped. Manage keys at ${API_KEYS_URL}. Nothing was fetched.`,
+      401,
+    );
+  }
+  if (!res.ok) {
+    let error = `http_${res.status}`;
+    let message = `RadMail API refused the attachment (HTTP ${res.status}).`;
+    try {
+      const body = (await res.json()) as Record<string, unknown>;
+      if (typeof body.error === "string") error = body.error;
+      if (typeof body.message === "string") message = body.message;
+    } catch {
+      /* a non-JSON refusal keeps the generic message */
+    }
+    return { refused: true, status: res.status, error, message };
+  }
+  const bytes = Buffer.from(await res.arrayBuffer());
+  return {
+    bytes,
+    filename: filenameFromDisposition(res.headers.get("content-disposition")),
+    contentType: res.headers.get("content-type"),
+  };
+}
+
 /** Shared pagination params for the list endpoints. */
 export interface RemotePageParams {
   limit?: number;
