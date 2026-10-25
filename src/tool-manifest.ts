@@ -17,7 +17,7 @@ export const TOOL_MANIFEST: FrozenManifest = {
   "version": 1,
   "algorithm": "sha256/canonical-json/zod-to-json-schema",
   "converterVersion": "3.25.2",
-  "serverInstructionsSha256": "cd5741c98eaaedd51f81ab0a71d77ae65aeea8b62960e7620f476cccb1874b66",
+  "serverInstructionsSha256": "1c5555f634332c1102292cf1675d8e0af759176b72887fb3d326d7ee0889fed2",
   "tools": [
     {
       "name": "check_send_domain",
@@ -92,5 +92,5 @@ export const TOOL_MANIFEST: FrozenManifest = {
       "sha256": "ab7388194979a2ff3f309b825e4e686e6be30efdfb118b7b297a65a7ca7eba2f"
     }
   ],
-  "manifestSha256": "8b33f5c4d48e29a01dd4fd62cd20a411755ce93e11b504853a4c6d2bfefb977b"
+  "manifestSha256": "7dbfdc10a249e2872f682c8c50c3dae014f789640a99aeb1481ad22c5b9fa27e"
 };

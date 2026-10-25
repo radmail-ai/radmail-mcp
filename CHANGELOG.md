@@ -22,8 +22,10 @@
   read it, so removing it outright would have broken that contract. New tools never emit
   `messageId`. `list_right_now` now also surfaces the RFC Message-ID the API always returned.
   `rfcMessageId` / `inReplyTo` are sender-chosen headers, so they arrive taint-wrapped like
-  `subject`, and anything that is not a `<left@right>` Message-ID of at most 255 printable
-  characters is withheld (`null`) — a shape check alone still admits a hyphen-joined sentence.
+  `subject`, and anything that is not a Message-ID (`left@right`, bare or bracketed) of at most
+  255 printable characters is withheld (`null`) — a shape check alone still admits a
+  hyphen-joined sentence. Bare is the common case: RadMail stores the header with the brackets
+  stripped and lowercased, and returns it as stored.
 - **Commitments link to their source:** `list_commitments` returns `emailId` and `threadId`
   (null on servers that predate them).
 - **A 404 says which of three things it is:** `not_found` (not visible to this key),

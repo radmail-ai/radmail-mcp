@@ -93,7 +93,7 @@ beforeEach(() => {
     const tag = auth === `Bearer ${KEY_A}` ? "A" : auth === `Bearer ${KEY_B}` ? "B" : "ENV";
     return json({
       ok: true,
-      data: [{ id: EMAIL_ID, from: "pat@vendor.example.com", subject: `inbox ${tag}`, snippet: "…", matchedIn: ["subject"], messageId: "<x@mail.example.com>" }],
+      data: [{ id: EMAIL_ID, from: "pat@vendor.example.com", subject: `inbox ${tag}`, snippet: "…", matchedIn: ["subject"], messageId: "x.4f2@mail.example.com" }],
       pagination: { limit: 10, offset: 0, total: 1, hasMore: false, nextCursor: null },
     });
   });
