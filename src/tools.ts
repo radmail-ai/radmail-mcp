@@ -665,7 +665,7 @@ export const ATTACHMENT_DIR_ENV = "RADMAIL_ATTACHMENT_DIR";
 
 /** An email id this tool will use in a filename: RadMail ids are UUIDs. Anything
  *  else is refused rather than rewritten, so two ids can never share a file. */
-const ATTACHMENT_ID_RE = /^[A-Za-z0-9-]{1,100}$/;
+const ATTACHMENT_ID_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,99})$/;
 
 /** Extension from the server's content type first (it vets the type), else
  *  the sender's filename, else .bin. */
@@ -732,8 +732,8 @@ export async function getAttachmentTool(args: { id: string; index: number; agent
       // name), then rename over the target: a symlink planted at the target is
       // replaced, never written through, and the file is always 0600.
       const tmp = join(dir, `.${args.id}-${args.index}.${randomBytes(6).toString("hex")}.tmp`);
-      writeFileSync(tmp, r.bytes, { mode: 0o600, flag: "wx" });
       try {
+        writeFileSync(tmp, r.bytes, { mode: 0o600, flag: "wx" });
         renameSync(tmp, path);
       } catch (e) {
         try {

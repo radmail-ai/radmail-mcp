@@ -182,7 +182,7 @@ test("get_attachment: an id that is not a plain id is refused, never rewritten",
     called = true;
     return new Response(PDF);
   });
-  for (const id of ["a/b/c", "../x", "!!!", ""]) {
+  for (const id of ["a/b/c", "../x", "!!!", "", "-", "-abc"]) {
     const r = (await getAttachmentTool({ id, index: 0 })) as Record<string, any>;
     assert.equal(r.ok, false, id);
     assert.equal(r.error.kind, "bad_request", id);
@@ -219,4 +219,26 @@ test("get_attachment: the UTF-8 filename* form is decoded and still tainted", as
   const r = (await getAttachmentTool({ id: ID, index: 0 })) as Record<string, any>;
   assert.equal(r.ok, true);
   assert.equal(r.filename.value, "Tax Report – July.pdf");
+});
+
+test("get_attachment: a huge refusal body is not read past 64 KB; the refusal still comes back", async () => {
+  __setFetchForTests(async () => {
+    let sent = 0;
+    const chunk = new Uint8Array(1024 * 1024).fill(32);
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        pull(c) {
+          if (sent >= 50 * 1024 * 1024) return c.close();
+          sent += chunk.byteLength;
+          c.enqueue(chunk);
+        },
+      }),
+      { status: 403, headers: { "content-type": "application/json" } },
+    );
+  });
+  const r = (await getAttachmentTool({ id: ID, index: 0 })) as Record<string, any>;
+  assert.equal(r.ok, false);
+  assert.equal(r.refused, true);
+  assert.equal(r.status, 403);
+  assert.equal(r.error, "http_403");
 });

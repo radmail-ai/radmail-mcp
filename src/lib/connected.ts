@@ -331,7 +331,9 @@ export async function getAttachment(
     let error = `http_${res.status}`;
     let message = `RadMail API refused the attachment (HTTP ${res.status}).`;
     try {
-      const body = (await res.json()) as Record<string, unknown>;
+      // Capped: a refusal is a few hundred bytes; a huge "error" body must not fill memory.
+      const raw = await readCapped(res, 64 * 1024, path);
+      const body = JSON.parse(raw.toString("utf8")) as Record<string, unknown>;
       if (typeof body.error === "string") error = body.error;
       if (typeof body.message === "string") message = body.message;
     } catch {
