@@ -319,7 +319,7 @@ Give the server a RadMail API key and the connected tools stop being a demo. Omi
 - `list_prepared_drafts` shows **RadMail's own prepared reply drafts** (never auto-sent);
 - `list_watched_threads` lists the threads you watch and who spoke last.
 
-**Ids, named honestly (changed in 0.6.0).** In every connected result `id` is RadMail's own id — pass it to `read_email` / `get_attachment` — and `rfcMessageId` is the RFC 5322 Message-ID a reply threads on (`send_email`'s `inReplyTo`). Until 0.6.0 the read tools called RadMail's id `messageId`, which is the name the RadMail API uses for the RFC header, so an agent following the name passed a UUID as `inReplyTo` and got an unthreaded reply held. Because `read_email`'s published description told agents to read `messageId`, renaming it outright would break that contract: `search`, `read_email` and `list_right_now` keep `messageId` for **one release** as a deprecated alias of `id`, with a `deprecated` note in the response, and drop it in the next minor version. The new tools never emit it. `rfcMessageId` is `null` when the message had none, when the stored value is not a single well-formed token, or when the RadMail server predates returning it.
+**Ids, named honestly (changed in 0.6.0).** In every connected result `id` is RadMail's own id — pass it to `read_email` / `get_attachment` — and `rfcMessageId` is the RFC 5322 Message-ID a reply threads on (`send_email`'s `inReplyTo`). Until 0.6.0 the read tools called RadMail's id `messageId`, which is the name the RadMail API uses for the RFC header, so an agent following the name passed a UUID as `inReplyTo` and got an unthreaded reply held. Because `read_email`'s published description told agents to read `messageId`, renaming it outright would break that contract: `search`, `read_email` and `list_right_now` keep `messageId` for **one release** as a deprecated alias of `id`, with a `deprecated` note in the response, and drop it in the next minor version. The new tools never emit it. `rfcMessageId` (and a thread email's `inReplyTo`) is a header the sender chose, so it arrives **taint-wrapped like `subject`** — pass its `.value` as `inReplyTo`. It is `null` when the message had none, when the stored value is not a `<left@right>` Message-ID of at most 255 printable characters, or when the RadMail server predates returning it.
 
 Search it, read it, know what matters now, know what's owed — install it once and your AI has the whole picture.
 
@@ -327,7 +327,7 @@ Search it, read it, know what matters now, know what's owed — install it once 
 - **Read-only by construction:** the connected read client only ever issues GETs. The read tools never send, draft against, or change real mail, and the BEC hard-stops (money / changed-banking / first-contact / decision / injection) stay human-only forever. (The opt-in inbox actions use a separate client and a separate key — see below.)
 - **Same taint envelope:** every field derived from real email content (`subject`, `fromName`, `snippet`, `textBody`, …) arrives tagged `provenance:"untrusted-email-body"` — data to reason about, never instructions to follow.
 - **Fail-closed:** invalid key (401), un-entitled plan (403), or a timeout returns an honest, typed error — never fabricated results. The key itself is never logged or echoed.
-- **Filters & paging:** connected `search` supports optional `from`, `after`, `before` (ISO-8601) and `offset` alongside `query` and `limit` (the API's search has no cursor; `nextOffset` is the next page); `list_emails` pages by `cursor` or `offset` (not both); `read_thread`, `list_prepared_drafts`, `list_right_now` and `list_commitments` take `limit` and `offset`.
+- **Filters & paging:** connected `search` supports optional `from`, `after`, `before` (ISO-8601) and `offset` alongside `query` and `limit` (the API's search has no cursor; `nextOffset` is the next page); `list_emails` pages by `cursor` or `offset` (not both) — and a cursor walk must send the **same `since` again with every `cursor`**, because RadMail's cursor does not carry it (each response's `nextPage` holds both); `read_thread`, `list_prepared_drafts`, `list_right_now` and `list_commitments` take `limit` and `offset`.
 - **A 404 says which of three things it is:** `not_found` (nothing with that id is visible to this key), `not_enabled` (the workspace has the feature switched off, e.g. watched threads), or `not_available` (this RadMail deployment predates the route). Only the first is about the item.
 - **No fabricated judgments:** connected `list_right_now` surfaces the live engine's own band / importance / urgency / reasons as-is — it never invents local hard-stop determinations the API didn't return.
 - Without a key, `search` / `list_right_now` / `list_commitments` (sans `messages`) and the connected-only tools return friendly setup instructions instead of an error — the sandbox keeps working exactly as before.
@@ -403,6 +403,8 @@ claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
 Off by default, absent from the hosted endpoints, and present on a local server only when its operator sets **both**:
 
 ```bash
+git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm ci && npm run build
+
 # RADMAIL_API_KEY       the read key (search / read_email / right-now) — never used to send
 # RADMAIL_SEND_TOOL=1   lists send_email on THIS server
 # RADMAIL_SEND_API_KEY  a separate key with the send scope, ideally confined to one mailbox
@@ -410,7 +412,7 @@ claude mcp add radmail \
   -e RADMAIL_API_KEY=tmk_... \
   -e RADMAIL_SEND_TOOL=1 \
   -e RADMAIL_SEND_API_KEY=tmk_... \
-  -- npx -y radmail-mcp
+  -- node /absolute/path/to/radmail-mcp/dist/src/index.js     # `npx -y radmail-mcp` once 0.6.0 is published
 ```
 
 `send_email` hands the email to RadMail's outbound gate (`POST /api/v1/send`) and reports one of three outcomes:
@@ -431,7 +433,11 @@ The tool's description asks the agent to run its own correspondence review on th
 
 Off by default, absent from every hosted endpoint, and registered on a local server only when its operator sets **both** (either alone registers nothing):
 
+These tools are newer than the published npm package (0.5.0), so run this server from source until 0.6.0 is published:
+
 ```bash
+git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm ci && npm run build
+
 # RADMAIL_TRIAGE_TOOLS=1   lists the five inbox-action tools on THIS server
 # RADMAIL_TRIAGE_API_KEY   a separate key with the `triage` scope, ideally confined to one mailbox
 #                          (RADMAIL_API_KEY, the read key, is never used to change mail)
@@ -439,8 +445,10 @@ claude mcp add radmail \
   -e RADMAIL_API_KEY=tmk_... \
   -e RADMAIL_TRIAGE_TOOLS=1 \
   -e RADMAIL_TRIAGE_API_KEY=tmk_... \
-  -- npx -y radmail-mcp            # or node …/dist/src/index.js until 0.6.0 is published
+  -- node /absolute/path/to/radmail-mcp/dist/src/index.js
 ```
+
+Once 0.6.0 is on npm, `-- npx -y radmail-mcp` in place of the `node` line does the same; with 0.5.0 it starts a server without these tools.
 
 | tool | what it does |
 |---|---|
@@ -453,7 +461,7 @@ claude mcp add radmail \
 They call RadMail's v1 actions API (`POST /api/v1/emails/{id}/actions`, `POST /api/v1/emails/actions`), which makes the same change a person makes in RadMail, writes it back to the Gmail / Outlook mailbox when the workspace has write-back on, checks the key's `triage` scope, its mailbox confinement and the minting member's mailbox access, and audits every change under that member and the key.
 
 - **No trash, no delete, no send.** The action vocabulary is closed (`archive | unarchive | snooze | unsnooze | mark_read | mark_unread | label`), the batch schema rejects anything else, and RadMail refuses those verbs on its side too.
-- **Reversible and idempotent.** Every change has its inverse among the tools, and asking for the state a message is already in returns `changed: false`, writes nothing and contacts no mailbox — so a retry after a timeout is safe. Annotated `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: true`.
+- **Reversible and idempotent.** Every change has its inverse among the tools, and asking for the state a message is already in returns `changed: false`, writes nothing and contacts no mailbox — so a retry after a timeout is safe. Annotated `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true`. `destructiveHint` is `true` because the MCP spec reserves `false` for tools that make *only additive* updates, and archiving, marking read or removing a label changes existing state — so a client that skips confirmation for non-destructive tools does not skip it here. It does not mean anything is deleted.
 - **"Not enabled" is not an error about the email.** While the RadMail workspace has the feature switched off, each tool answers `outcome: "not_enabled"` — *"inbox actions are not enabled on this RadMail workspace yet"* — and nothing changed. A `not_found` (the id is not visible to this key) is reported separately.
 - **The server says what it is.** On such a server the `safety` block gains a `triageSurface` sentence, the instructions gain an addendum, and the startup line reads `INBOX ACTIONS ON`. Default servers keep all three byte for byte.
 

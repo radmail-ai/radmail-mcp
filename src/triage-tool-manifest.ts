@@ -17,24 +17,24 @@ export const TRIAGE_TOOL_MANIFEST: FrozenManifest = {
   "tools": [
     {
       "name": "act_on_emails",
-      "sha256": "1c28341cbb02c4c5a24d5c72afec11116728209f630bd7860b9279c521a17e31"
+      "sha256": "1172d72d3a08ac22cc86ee6fe77142619b7cd204be7323f4ee5a1eb758114ed1"
     },
     {
       "name": "archive_email",
-      "sha256": "c311d25c8778becdf5d5f47d1c8c763409cf10de2d2d4b4da7132d2cf75e36f9"
+      "sha256": "a1c70261d4d33286021a0aa6e640f9b5d3063f22a9a92ee1e0583825d6a7df18"
     },
     {
       "name": "label_email",
-      "sha256": "f71bbb3886337d64be594007511acf003d41c86eb93c14ca38e8fe7daf36da1f"
+      "sha256": "bd98132bd10fa1a70149283275cac7b2497e55b12ac9f009dc677d3af4d01b93"
     },
     {
       "name": "mark_read",
-      "sha256": "d3579da5e23820ca7fa86544aefd5b17a0ad135ea95d0dc7e9637b4ccfe11aad"
+      "sha256": "c54b56fb99a8eb765edbd0dbb822341d9c5f1f36d212e54cfc6c05c9f96b71c8"
     },
     {
       "name": "snooze_email",
-      "sha256": "650192345f39eb594cac720e57d39e4cfeba107767b790b142edd93c291d5b65"
+      "sha256": "fddb1c0bef5fb940464d9a7e4ec78b0653dfed394d8d4d7637618b5b7eb15efc"
     }
   ],
-  "manifestSha256": "a5a83c83d926e96def62c3b3d218160a41dfa4343aac3bfbae3936844b26c49b"
+  "manifestSha256": "69fe1ba0e098a407be44d0d2b9d4ab72113c3dbf1e687147118654c03ff319f4"
 };

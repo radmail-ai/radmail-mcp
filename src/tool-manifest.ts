@@ -37,7 +37,7 @@ export const TOOL_MANIFEST: FrozenManifest = {
     },
     {
       "name": "list_emails",
-      "sha256": "c929a8b57abd9e52650568043bd1f32a84c90d32c2a625fa043ad5e9a3700497"
+      "sha256": "a36abd762e133678eb137a8b0ea2542490a5bb3a76b5d02f660c149270a075d3"
     },
     {
       "name": "list_prepared_drafts",
@@ -92,5 +92,5 @@ export const TOOL_MANIFEST: FrozenManifest = {
       "sha256": "ab7388194979a2ff3f309b825e4e686e6be30efdfb118b7b297a65a7ca7eba2f"
     }
   ],
-  "manifestSha256": "6514e191270f355c4c26204dbbc8cef6f7f42144a964a305fc12ce80a491127a"
+  "manifestSha256": "8b33f5c4d48e29a01dd4fd62cd20a411755ce93e11b504853a4c6d2bfefb977b"
 };

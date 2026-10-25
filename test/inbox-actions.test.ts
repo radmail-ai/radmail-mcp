@@ -418,16 +418,20 @@ describe("🛑 there is no trash or delete anywhere", () => {
 // ─── (e) annotations + freeze ────────────────────────────────────────────────
 
 describe("annotations are true, and frozen", () => {
-  test("each action tool: not read-only, not destructive, idempotent — on the wire too", async () => {
+  test("each action tool: not read-only, DESTRUCTIVE by the MCP definition, idempotent — on the wire too", async () => {
+    // The spec: destructiveHint false = "performs only additive updates". Archive,
+    // mark read and label removal change existing state, so they are not additive,
+    // and a client that skips confirmation for non-destructive tools must not skip
+    // it for these (review of #23). Nothing is deleted; that is a separate claim.
     for (const d of TRIAGE_TOOL_DEFS) {
-      assert.deepEqual(d.annotations, { readOnlyHint: false, destructiveHint: false, idempotentHint: true }, d.name);
+      assert.deepEqual(d.annotations, { readOnlyHint: false, destructiveHint: true, idempotentHint: true }, d.name);
     }
     process.env.RADMAIL_TRIAGE_API_KEY = TRIAGE_KEY;
     const { tools } = await listTools(createServer({ enableTriage: true }));
     for (const n of ACTION_NAMES) {
       const t = tools.find((x) => x.name === n)!;
       assert.equal(t.annotations?.readOnlyHint, false, n);
-      assert.equal(t.annotations?.destructiveHint, false, n);
+      assert.equal(t.annotations?.destructiveHint, true, n);
       assert.equal(t.annotations?.idempotentHint, true, n);
     }
     assert.equal(tools.find((x) => x.name === "search")?.annotations?.readOnlyHint, true, "read tools stay read-only");
@@ -438,9 +442,9 @@ describe("annotations are true, and frozen", () => {
     assert.deepEqual(v.mismatches, []);
   });
 
-  test("POISON: flipping one annotation (destructiveHint → true) goes RED — annotations are inside the freeze", () => {
+  test("POISON: flipping one annotation (destructiveHint → false, i.e. 'skip the confirmation') goes RED — annotations are inside the freeze", () => {
     const flipped = TRIAGE_TOOL_DEFS.map((d) =>
-      d.name === "archive_email" ? { ...d, annotations: { ...d.annotations, destructiveHint: true } } : d,
+      d.name === "archive_email" ? { ...d, annotations: { ...d.annotations, destructiveHint: false } } : d,
     );
     const v = verifyToolManifest(TRIAGE_TOOL_MANIFEST, flipped, TRIAGE_INSTRUCTIONS_ADDENDUM);
     assert.equal(v.ok, false);

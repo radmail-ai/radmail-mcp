@@ -11,7 +11,8 @@
   (`provenance:"untrusted-email-body"`), including draft bodies and sender-chosen attachment
   filenames. `list_emails` **fails closed** on a RadMail deployment too old to honour
   `since` / `cursor` (it would otherwise return the newest page of the whole mailbox as
-  "new"); without them it still lists.
+  "new"); without them it still lists. RadMail's cursor does not carry `since`, so the description,
+  the note and a `nextPage` object (cursor + the same since) all say to send both.
 - **`search` pages:** a new `offset` input and a `nextOffset` output. The API's search has no
   cursor, so none is offered there; `list_emails` is the cursor walk.
 - **Ids renamed honestly.** Connected results now carry `id` (RadMail's own id) and
@@ -20,8 +21,9 @@
   `deprecated` note in the response — the published `read_email` description told agents to
   read it, so removing it outright would have broken that contract. New tools never emit
   `messageId`. `list_right_now` now also surfaces the RFC Message-ID the API always returned.
-  A stored Message-ID that is not a single well-formed token is withheld (`null`), not handed
-  over untainted.
+  `rfcMessageId` / `inReplyTo` are sender-chosen headers, so they arrive taint-wrapped like
+  `subject`, and anything that is not a `<left@right>` Message-ID of at most 255 printable
+  characters is withheld (`null`) — a shape check alone still admits a hyphen-joined sentence.
 - **Commitments link to their source:** `list_commitments` returns `emailId` and `threadId`
   (null on servers that predate them).
 - **A 404 says which of three things it is:** `not_found` (not visible to this key),
@@ -39,7 +41,8 @@
   the safety block gains a `triageSurface` sentence and the instructions an addendum on such a
   server only.
 - **MCP annotations, frozen.** Connected read tools carry `readOnlyHint: true`; the inbox
-  actions `readOnlyHint: false, destructiveHint: false, idempotentHint: true`; `send_email`,
+  actions `readOnlyHint: false, destructiveHint: true, idempotentHint: true` (the spec reserves
+  `false` for only-additive updates; archive / read state / label removal are not additive); `send_email`,
   `get_attachment` (it writes a local file) and the sandbox-only tools carry none. Annotations
   are now part of each tool's manifest hash when present, so flipping one fails startup like a
   description edit. **Manifest regenerated deliberately:** the sandbox-only tools' hashes and
