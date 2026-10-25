@@ -17,16 +17,18 @@ import { dirname, join } from "node:path";
 // IMPORTANT (bootstrap): import SERVER_INSTRUCTIONS from server-info.ts, NOT
 // server.ts — server.ts statically imports src/tool-manifest.ts, and this
 // script must run when that artifact does not exist yet.
-import { TOOL_DEFS, SEND_TOOL_DEF } from "../src/tools.js";
-import { SERVER_INSTRUCTIONS, SEND_INSTRUCTIONS_ADDENDUM } from "../src/server-info.js";
+import { TOOL_DEFS, SEND_TOOL_DEF, TRIAGE_TOOL_DEFS } from "../src/tools.js";
+import { SERVER_INSTRUCTIONS, SEND_INSTRUCTIONS_ADDENDUM, TRIAGE_INSTRUCTIONS_ADDENDUM } from "../src/server-info.js";
 import { computeToolManifest, lintToolDescriptions } from "../src/lib/manifest.js";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "tool-manifest.ts");
 const SEND_OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "send-tool-manifest.ts");
+const TRIAGE_OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "triage-tool-manifest.ts");
 
 const violations = [
   ...lintToolDescriptions(TOOL_DEFS, SERVER_INSTRUCTIONS),
   ...lintToolDescriptions([SEND_TOOL_DEF], SEND_INSTRUCTIONS_ADDENDUM),
+  ...lintToolDescriptions(TRIAGE_TOOL_DEFS, TRIAGE_INSTRUCTIONS_ADDENDUM),
 ];
 if (violations.length > 0) {
   console.error("REFUSING to regenerate: the tool surface fails the anti-injection lint:");
@@ -82,3 +84,26 @@ writeFileSync(SEND_OUT, sendBanner + JSON.stringify(sendManifest, null, 2) + ";\
 console.log(`Wrote ${SEND_OUT}`);
 for (const t of sendManifest.tools) console.log(`  ${t.name.padEnd(26)} ${t.sha256}`);
 console.log(`  SEND MANIFEST        ${sendManifest.manifestSha256}`);
+
+// ── The opt-in inbox-action tools, frozen on their own ─────────────────────
+// Registered only by createServer({ enableTriage: true }) — local stdio, with
+// RADMAIL_TRIAGE_TOOLS=1 AND RADMAIL_TRIAGE_API_KEY — which re-verifies
+// against THIS file. Kept out of the default manifest so the default and
+// hosted surfaces carry no tool that changes a mailbox.
+const triageManifest = computeToolManifest(TRIAGE_TOOL_DEFS, TRIAGE_INSTRUCTIONS_ADDENDUM);
+const triageBanner = `// GENERATED FILE — DO NOT EDIT BY HAND.
+//
+// Frozen manifest of the OPT-IN inbox-action tools (archive_email,
+// snooze_email, mark_read, label_email, act_on_emails) and the instructions
+// addendum a triage-enabled server appends. Verified by
+// createServer({ enableTriage: true }) before the tools are registered; a
+// mismatch refuses to serve. Regenerate with
+//   npm run manifest:regen   — then review + commit this file.
+
+import type { FrozenManifest } from "./lib/manifest.js";
+
+export const TRIAGE_TOOL_MANIFEST: FrozenManifest = `;
+writeFileSync(TRIAGE_OUT, triageBanner + JSON.stringify(triageManifest, null, 2) + ";\n", "utf8");
+console.log(`Wrote ${TRIAGE_OUT}`);
+for (const t of triageManifest.tools) console.log(`  ${t.name.padEnd(26)} ${t.sha256}`);
+console.log(`  TRIAGE MANIFEST      ${triageManifest.manifestSha256}`);

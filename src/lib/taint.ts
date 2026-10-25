@@ -95,16 +95,54 @@ export const SAFETY_BLOCK_SEND_ENABLED = Object.freeze({
   taintNotice: SAFETY_BLOCK.taintNotice,
 } as const);
 
+/**
+ * The sentence a server with the opt-in inbox-action tools turned on adds to
+ * its safety block. Those tools change a message's inbox state, so a block
+ * that only described read tools would be incomplete on such a server. The
+ * default block (and the hosted endpoint, which never registers the tools)
+ * stays byte for byte as it was.
+ */
+export const TRIAGE_SURFACE_NOTICE =
+  "This server has the opt-in inbox-action tools turned on (archive, snooze, read state, labels). They change a message's " +
+  "inbox state through RadMail's actions API with a separate triage-scoped key, and RadMail audits every change. None of " +
+  "them sends, trashes or deletes mail, and each change can be reversed (unarchive, unsnooze, mark unread, remove the label). " +
+  "Every other tool here is read-only.";
+
+/** Default block + the inbox-action sentence (send still off: "never sends" stays true). */
+export const SAFETY_BLOCK_TRIAGE_ENABLED = Object.freeze({
+  ...SAFETY_BLOCK,
+  triageSurface: TRIAGE_SURFACE_NOTICE,
+} as const);
+
+/** Send-enabled block + the inbox-action sentence. */
+export const SAFETY_BLOCK_SEND_AND_TRIAGE_ENABLED = Object.freeze({
+  ...SAFETY_BLOCK_SEND_ENABLED,
+  triageSurface: TRIAGE_SURFACE_NOTICE,
+} as const);
+
 let sendSurfaceActive = false;
+let triageSurfaceActive = false;
 
 /** Called ONLY by createServer() when it registers send_email on a local server. */
 export function setSendSurfaceActive(active: boolean): void {
   sendSurfaceActive = active;
 }
 
+/** Called ONLY by createServer() when it registers the inbox-action tools on a local server. */
+export function setTriageSurfaceActive(active: boolean): void {
+  triageSurfaceActive = active;
+}
+
+export type AnySafetyBlock =
+  | SafetyBlock
+  | typeof SAFETY_BLOCK_SEND_ENABLED
+  | typeof SAFETY_BLOCK_TRIAGE_ENABLED
+  | typeof SAFETY_BLOCK_SEND_AND_TRIAGE_ENABLED;
+
 /** The safety block this process must attach. */
-export function currentSafetyBlock(): SafetyBlock | typeof SAFETY_BLOCK_SEND_ENABLED {
-  return sendSurfaceActive ? SAFETY_BLOCK_SEND_ENABLED : SAFETY_BLOCK;
+export function currentSafetyBlock(): AnySafetyBlock {
+  if (sendSurfaceActive) return triageSurfaceActive ? SAFETY_BLOCK_SEND_AND_TRIAGE_ENABLED : SAFETY_BLOCK_SEND_ENABLED;
+  return triageSurfaceActive ? SAFETY_BLOCK_TRIAGE_ENABLED : SAFETY_BLOCK;
 }
 
 /** A one-line reminder to splice into each tool's DESCRIPTION string. */
@@ -116,6 +154,6 @@ export const TOOL_DESCRIPTION_TAINT_SUFFIX =
 /** Attach the standing safety block to any response object. */
 export function withSafety<T extends object>(
   body: T,
-): T & { safety: SafetyBlock | typeof SAFETY_BLOCK_SEND_ENABLED } {
+): T & { safety: AnySafetyBlock } {
   return { ...body, safety: currentSafetyBlock() };
 }

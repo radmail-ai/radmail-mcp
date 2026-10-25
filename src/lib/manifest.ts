@@ -23,12 +23,14 @@
 //   npm run manifest:regen   (lints first, then rewrites src/tool-manifest.ts)
 //
 // FREEZE COVERAGE (scope honesty): the freeze covers the TOOL_DEFS data —
-// name + description + published input schema — plus SERVER_INSTRUCTIONS.
-// It does NOT cover registration-call fields added outside TOOL_DEFS (a
-// `title` or `annotations` passed to registerTool, or an extra registerTool
-// after the loop in src/server.ts), nor out-of-band listing surfaces like
-// public/.well-known/mcp.json. Those are agent-facing too: keep them sourced
-// from / synced with the frozen surface (guarded by tests where possible).
+// name + description + published input schema + MCP `annotations` (since
+// 0.6.0; hashed only when a tool declares them, so a tool without annotations
+// keeps the hash it always had) — plus SERVER_INSTRUCTIONS. It does NOT cover
+// registration-call fields added outside TOOL_DEFS (a `title` passed to
+// registerTool, or an extra registerTool after the loop in src/server.ts), nor
+// out-of-band listing surfaces like public/.well-known/mcp.json. Those are
+// agent-facing too: keep them sourced from / synced with the frozen surface
+// (guarded by tests where possible).
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -127,13 +129,17 @@ export function publishedInputSchema(def: ToolDef): Record<string, unknown> {
   return schema;
 }
 
-/** Canonical fingerprint of one tool: name + description + published schema. */
+/** Canonical fingerprint of one tool: name + description + published schema
+ *  (+ annotations, when the tool declares any — a hint like readOnlyHint is
+ *  agent-facing and a client may skip a confirmation on it, so flipping one
+ *  must move the hash exactly like a description edit). */
 export function toolSha256(def: ToolDef): string {
   return sha256Hex(
     canonicalJson({
       name: def.name,
       description: def.description,
       inputSchema: publishedInputSchema(def),
+      ...(def.annotations !== undefined ? { annotations: def.annotations } : {}),
     }),
   );
 }

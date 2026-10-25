@@ -7,10 +7,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { startupBanner } from "./lib/mode.js";
 import { createServer } from "./server.js";
 import { sendToolRequested } from "./lib/send.js";
+import { triageToolsEnabled } from "./lib/inbox-actions.js";
 
 async function main(): Promise<void> {
   // RADMAIL_SEND_TOOL=1 turns on the opt-in send_email tool — LOCAL entries only.
-  const server = createServer({ enableSend: sendToolRequested() });
+  // RADMAIL_TRIAGE_TOOLS=1 + RADMAIL_TRIAGE_API_KEY turn on the inbox-action tools — LOCAL entries only.
+  const server = createServer({ enableSend: sendToolRequested(), enableTriage: triageToolsEnabled() });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // eslint-disable-next-line no-console

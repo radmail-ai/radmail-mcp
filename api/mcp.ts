@@ -9,15 +9,74 @@
 // Current @vercel/node invokes a DEFAULT export in Node (req,res) style and
 // ignores a returned web `Response` (the function then 504s); named method
 // exports select the web signature unambiguously.
+//
+// ── CONNECTED MODE, PER REQUEST (preview, 0.6.0) ────────────────────────────
+// A request carrying `Authorization: Bearer tmk_…` gets a server whose
+// connected read tools use THAT key, for THAT request only. There is no
+// process-wide key on this endpoint: a request without a bearer is sandbox-only
+// exactly as before, even if RADMAIL_API_KEY happens to be set on the
+// deployment. The opt-in send and inbox-action tools are never registered here,
+// whatever the environment says, so the hosted surface stays non-destructive.
+// 🛑 The key is never logged, echoed or put in any response — not even a prefix.
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createServer } from "../src/server.js";
 import { SERVER_INSTRUCTIONS } from "../src/server-info.js";
 import { TOOL_DEFS } from "../src/tools.js";
+import { DEFAULT_API_URL, type ConnectedConfig } from "../src/lib/connected.js";
 import { TOOL_MANIFEST } from "../src/tool-manifest.js";
 import { verifyToolManifest, type ManifestVerification } from "../src/lib/manifest.js";
 import { checkRateLimit, clientIp } from "../src/lib/rate-limit.js";
+
+/** The documented RadMail key shape: tmk_live_ or tmk_test_ + 40 hex characters. */
+const RADMAIL_KEY_RE = /^tmk_(?:live|test)_[0-9a-f]{40}$/;
+
+export type BearerResolution =
+  | { kind: "none" }
+  | { kind: "connected"; cfg: ConnectedConfig }
+  | { kind: "malformed" };
+
+/**
+ * Decide what this ONE request's Authorization header means. Exported for tests.
+ *   · no header, or a bearer that is not a RadMail key (`tmk_…`) → sandbox, as before
+ *   · a well-formed RadMail key → connected read tools with that key, this request only
+ *   · something that starts like a RadMail key but is malformed → refused (401), so a
+ *     typo is never silently served the demo inbox as if it were the user's
+ * The API host comes from RADMAIL_API_URL (a host, not a secret) or the default.
+ */
+export function resolveBearer(
+  req: Request,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): BearerResolution {
+  const header = req.headers.get("authorization");
+  if (!header) return { kind: "none" };
+  const m = /^Bearer\s+(\S+)\s*$/i.exec(header.trim());
+  if (!m) return { kind: "none" };
+  const token = m[1];
+  if (!token.startsWith("tmk_")) return { kind: "none" };
+  if (!RADMAIL_KEY_RE.test(token)) return { kind: "malformed" };
+  const apiUrl = (env.RADMAIL_API_URL?.trim() || DEFAULT_API_URL).replace(/\/+$/, "");
+  return { kind: "connected", cfg: { apiKey: token, apiUrl } };
+}
+
+/** 401 for a malformed RadMail key. Names the expected shape, never the value sent. */
+export function malformedBearerResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      error: {
+        code: -32001,
+        message:
+          "The Authorization header carries something that starts like a RadMail API key but is not one " +
+          "(expected tmk_live_ or tmk_test_ followed by 40 hex characters). Nothing was read. Copy the key again " +
+          "from https://app.radmail.ai/settings/api-keys, or send no Authorization header for the sandbox.",
+      },
+      id: null,
+    }),
+    { status: 401, headers: { "content-type": "application/json" } },
+  );
+}
 
 /** JSON-RPC-shaped fail-closed response for a tool-manifest mismatch. MCP
  *  clients get a named -32000 error instead of a bare platform 500 — fail
@@ -65,6 +124,12 @@ export function healthResponse(
       endpoint: "/api/mcp",
       toolManifest: "verified",
       note: "POST JSON-RPC MCP requests here. Zero-auth sandbox; tools auto-provision a tenant.",
+      connectedPreview: {
+        status: "preview",
+        how: "send Authorization: Bearer tmk_… (a RadMail API key) on each POST; that request's connected read tools use that key",
+        tools: "read tools only (search, read_email, read_thread, list_emails, list_right_now, list_commitments, list_prepared_drafts, list_watched_threads)",
+        never: "no send and no inbox-action tool is registered on this endpoint, with or without a key; no key is stored, logged or echoed",
+      },
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
@@ -98,12 +163,18 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  // Per-request connected mode: this request's own bearer, or none. Never a
+  // process-wide key, and never the opt-in send / inbox-action tools.
+  const bearer = resolveBearer(req);
+  if (bearer.kind === "malformed") return malformedBearerResponse();
+  const connected = bearer.kind === "connected" ? bearer.cfg : null;
+
   // createServer() runs the fail-closed manifest gate and THROWS on drift —
   // keep it inside a try so the refusal reaches the client as a JSON-RPC
   // -32000 "server disabled", not a bare platform 500.
   let server: McpServer;
   try {
-    server = createServer();
+    server = createServer({ connected, hosted: true });
   } catch (err) {
     if (err instanceof Error && err.message.includes("TOOL MANIFEST MISMATCH")) {
       return manifestMismatchResponse();
