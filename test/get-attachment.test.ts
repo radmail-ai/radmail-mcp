@@ -154,7 +154,7 @@ test("get_attachment: a declared Content-Length over the cap is refused before r
   assert.match(r.error.message, /larger than/);
 });
 
-test("get_attachment: a body that stalls after the headers times out (the deadline covers the body)", async () => {
+test("get_attachment: a body that stalls after the headers times out (the deadline covers the body)", { timeout: 5000 }, async () => {
   __setAttachmentTimeoutForTests(150);
   __setFetchForTests(async (_url, init) => {
     const signal = init.signal as AbortSignal;
