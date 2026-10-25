@@ -255,6 +255,40 @@ function filenameFromDisposition(h: string | null): string | null {
   return plain ? plain[1].trim() : null;
 }
 
+/** Largest attachment this client will accept: the server's own hard ceiling (25 MB). */
+export const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
+/** One deadline for the WHOLE download, headers and body (review of #21: the
+ *  request timer used to stop at the headers, so a stalled body hung forever). */
+export const ATTACHMENT_TIMEOUT_MS = 60_000;
+let attachmentTimeoutMs = ATTACHMENT_TIMEOUT_MS;
+/** Test-only: shorten the download deadline (pass null to restore). */
+export function __setAttachmentTimeoutForTests(ms: number | null): void {
+  attachmentTimeoutMs = ms ?? ATTACHMENT_TIMEOUT_MS;
+}
+
+/** Read a body up to `max` bytes; throws ConnectedApiError("api") past the cap. */
+async function readCapped(res: Response, max: number, path: string): Promise<Buffer> {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > max) {
+    throw new ConnectedApiError("api", `The attachment is larger than ${max} bytes (GET ${path}). Nothing was saved.`, res.status);
+  }
+  if (!res.body) return Buffer.alloc(0);
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => {});
+      throw new ConnectedApiError("api", `The attachment is larger than ${max} bytes (GET ${path}). Nothing was saved.`, res.status);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+
 /**
  * GET /api/v1/emails/{id}/attachments/{index} — one attachment's bytes, which
  * the RadMail server fetches from the mail provider for this request and does
@@ -269,13 +303,20 @@ export async function getAttachment(
   cfg: ConnectedConfig,
 ): Promise<RemoteAttachment | RemoteAttachmentRefusal> {
   const path = `/api/v1/emails/${encodeURIComponent(id)}/attachments/${index}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), attachmentTimeoutMs);
+  const timeoutError = () =>
+    new ConnectedApiError("timeout", `The attachment did not arrive within ${attachmentTimeoutMs / 1000}s (GET ${path}). Nothing was saved.`);
+  try {
   let res: Response;
   try {
-    res = await fetchOnce(`${cfg.apiUrl}${path}`, cfg.apiKey);
+    res = await fetchImpl(`${cfg.apiUrl}${path}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${cfg.apiKey}` },
+      signal: ctrl.signal,
+    });
   } catch (e) {
-    if (isAbortError(e)) {
-      throw new ConnectedApiError("timeout", `The RadMail API did not respond within ${TIMEOUT_MS / 1000}s (GET ${path}). Nothing was fetched.`);
-    }
+    if (isAbortError(e)) throw timeoutError();
     const detail = e instanceof Error ? e.message : String(e);
     throw new ConnectedApiError("network", `Could not reach the RadMail API at ${cfg.apiUrl} (${detail}). Nothing was fetched.`);
   }
@@ -298,12 +339,21 @@ export async function getAttachment(
     }
     return { refused: true, status: res.status, error, message };
   }
-  const bytes = Buffer.from(await res.arrayBuffer());
+  let bytes: Buffer;
+  try {
+    bytes = await readCapped(res, ATTACHMENT_MAX_BYTES, path);
+  } catch (e) {
+    if (isAbortError(e)) throw timeoutError();
+    throw e;
+  }
   return {
     bytes,
     filename: filenameFromDisposition(res.headers.get("content-disposition")),
     contentType: res.headers.get("content-type"),
   };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Shared pagination params for the list endpoints. */

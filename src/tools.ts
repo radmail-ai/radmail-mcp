@@ -15,7 +15,8 @@
 // over the original surface (research #1: quarantine untrusted email data).
 
 import { z } from "zod";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, renameSync, unlinkSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import {
   taint,
@@ -662,6 +663,32 @@ export async function readEmailTool(args: { id: string; agentId?: string; focus?
 // sender's filename is reported, never used as a path.
 export const ATTACHMENT_DIR_ENV = "RADMAIL_ATTACHMENT_DIR";
 
+/** An email id this tool will use in a filename: RadMail ids are UUIDs. Anything
+ *  else is refused rather than rewritten, so two ids can never share a file. */
+const ATTACHMENT_ID_RE = /^[A-Za-z0-9-]{1,100}$/;
+
+/** Extension from the server's content type first (it vets the type), else
+ *  the sender's filename, else .bin. */
+const EXT_BY_TYPE: Record<string, string> = {
+  "application/pdf": "pdf",
+  "text/csv": "csv",
+  "text/plain": "txt",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/vnd.ms-excel": "xls",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+};
+export function attachmentExtension(contentType: string | null, filename: string | null): string {
+  const t = (contentType ?? "").split(";")[0].trim().toLowerCase();
+  if (EXT_BY_TYPE[t]) return EXT_BY_TYPE[t];
+  if (t === "application/octet-stream" || t === "") {
+    const m = /\.([A-Za-z0-9]{1,8})$/.exec(filename ?? "");
+    if (m) return m[1].toLowerCase();
+  }
+  return "bin";
+}
+
 export async function getAttachmentTool(args: { id: string; index: number; agentId?: string; focus?: string }): Promise<object> {
   recordCall(args.agentId, "get_attachment", args.focus);
   const cfg = getConnectedConfig();
@@ -669,6 +696,12 @@ export async function getAttachmentTool(args: { id: string; index: number; agent
     return notConnectedResult(
       "`get_attachment` fetches a file from the user's REAL RadMail inbox, which requires connected mode — and RADMAIL_API_KEY is not set on this server.",
     );
+  }
+  if (!ATTACHMENT_ID_RE.test(args.id)) {
+    return withSafety({
+      ok: false,
+      error: { kind: "bad_request", message: "The email id must be the messageId from a connected `search` hit. Nothing was fetched." },
+    });
   }
   const dir = process.env[ATTACHMENT_DIR_ENV]?.trim();
   if (!dir) {
@@ -692,11 +725,31 @@ export async function getAttachmentTool(args: { id: string; index: number; agent
         note: "The RadMail server refused this file and said why. Nothing was fetched or saved.",
       });
     }
-    const safeId = args.id.replace(/[^A-Za-z0-9-]/g, "");
-    const ext = (/\.([A-Za-z0-9]{1,8})$/.exec(r.filename ?? "")?.[1] ?? "bin").toLowerCase();
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const path = join(dir, `${safeId}-${args.index}.${ext}`);
-    writeFileSync(path, r.bytes, { mode: 0o600 });
+    const path = join(dir, `${args.id}-${args.index}.${attachmentExtension(r.contentType, r.filename)}`);
+    try {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      // Write a fresh temp file ("wx" refuses to follow or reuse anything at that
+      // name), then rename over the target: a symlink planted at the target is
+      // replaced, never written through, and the file is always 0600.
+      const tmp = join(dir, `.${args.id}-${args.index}.${randomBytes(6).toString("hex")}.tmp`);
+      writeFileSync(tmp, r.bytes, { mode: 0o600, flag: "wx" });
+      try {
+        renameSync(tmp, path);
+      } catch (e) {
+        try {
+          unlinkSync(tmp);
+        } catch {
+          /* best effort */
+        }
+        throw e;
+      }
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      return withSafety({
+        ok: false,
+        error: { kind: "local", message: `The file was fetched but could not be saved in ${ATTACHMENT_DIR_ENV} (${detail}). Check that folder on this machine.` },
+      });
+    }
     return withSafety({
       ok: true,
       savedTo: path,
