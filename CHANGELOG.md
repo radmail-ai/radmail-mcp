@@ -42,13 +42,19 @@
   `not_found` about the email. Frozen in their own manifest (`src/triage-tool-manifest.ts`);
   the safety block gains a `triageSurface` sentence and the instructions an addendum on such a
   server only.
+- **`send_email` reports a hand-off.** RadMail now hands money, changed-banking, decision,
+  injection and first-contact mail from an agent to a person, who sends it from their own mail
+  or discards it; nobody releases it in RadMail. A held result carries `handoff` (true / false,
+  or null when not known, e.g. a duplicate) and `handoffClasses`, and its note tells the agent
+  to say exactly that, never "release it". A duplicate of a handed-off request is never
+  re-sent. The send manifest, send instructions addendum and `sendSurface` sentence moved.
 - **MCP annotations, frozen.** Connected read tools carry `readOnlyHint: true`; the inbox
   actions `readOnlyHint: false, destructiveHint: true, idempotentHint: true` (the spec reserves
   `false` for only-additive updates; archive / read state / label removal are not additive); `send_email`,
   `get_attachment` (it writes a local file) and the sandbox-only tools carry none. Annotations
   are now part of each tool's manifest hash when present, so flipping one fails startup like a
-  description edit. **Manifest regenerated deliberately:** the sandbox-only tools' hashes and
-  the `send_email` manifest are byte-identical to 0.5.1; `search`, `read_email`,
+  description edit. **Manifest regenerated deliberately:** the sandbox-only tools' hashes are
+  byte-identical to 0.5.1; the `send_email` manifest moved once, for the hand-off wording below; `search`, `read_email`,
   `list_right_now`, `list_commitments`, `get_attachment`, the four new tools and the server
   instructions moved.
 - **Hosted endpoint, per-request connected mode (preview, DARK):** off unless the deployment

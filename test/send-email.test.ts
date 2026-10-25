@@ -130,7 +130,8 @@ describe("outcomes", () => {
     assert.equal(r.handoff, true);
     assert.deepEqual(r.handoffClasses, ["money", "changed-banking"], "only known class names are copied");
     assert.match(String(r.note), /HANDED TO A PERSON/);
-    assert.match(String(r.note), /send it themselves from their own mail/);
+    assert.match(String(r.note), /copy the draft into their own mail and send it, or discard it/);
+    assert.match(String(r.note), /checks to make first/);
     assert.match(String(r.note), /Do not tell them to release it/);
     assert.doesNotMatch(String(r.note), /releases or discards it/);
   });
@@ -146,10 +147,15 @@ describe("outcomes", () => {
     assert.doesNotMatch(String(r.note), /HANDED TO A PERSON/);
   });
 
-  test("a hold with no handoff field reads as an ordinary hold, never as a hand-off", () => {
-    const r = mapSendResponse(202, { ok: true, status: "held", requestId: REQ, reviewPath: `/sends/${REQ}` }, API);
-    assert.equal(r.outcome, "held");
-    assert.equal((r as { handoff: boolean | null }).handoff, false);
+  test("a hold with no handoff field is UNKNOWN, never a hand-off and never an owner release", async () => {
+    const m = mapSendResponse(202, { ok: true, status: "held", requestId: REQ, reviewPath: `/sends/${REQ}` }, API);
+    assert.equal(m.outcome, "held");
+    assert.equal((m as { handoff: boolean | null }).handoff, null);
+    const odd = mapSendResponse(202, { ok: true, status: "held", requestId: REQ, handoff: "true" }, API);
+    assert.equal((odd as { handoff: boolean | null }).handoff, null, "a non-boolean is not a yes");
+    serve(() => json({ ok: true, status: "held", requestId: REQ, reviewPath: `/sends/${REQ}` }, 202));
+    const r = (await sendEmailTool(ARGS)) as Record<string, unknown>;
+    assert.match(String(r.note), /the page says whether they release it there or send it themselves/);
   });
 
   test("duplicate of a held request: hand-off unknown, and the note says the page decides", async () => {

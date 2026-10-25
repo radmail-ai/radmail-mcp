@@ -5,20 +5,21 @@
 // ── WHAT DECIDES WHETHER MAIL LEAVES ────────────────────────────────────────
 // Not this file and not the calling agent. RadMail runs its own gate on every
 // request: the regime scrubber, the suppression list, a deterministic
-// checklist, an LLM review, the BEC tier (money / changed-banking /
-// first-contact / decision / injection, and regulator / government / court /
-// bank recipients ALWAYS hold) and the no-tap list (only the owner's own team
-// and established two-way contacts may send without a person). Anything else
-// is HELD, and a held send is released by a PERSON signed in to the RadMail
-// app. This client can only report which of three things happened:
+// checklist, an LLM review, the BEC tier (regulator / government / court /
+// bank recipients ALWAYS hold; money / changed-banking / first-contact /
+// decision / injection mail is HANDED OFF — see `held` below) and the no-tap
+// list (only the owner's own team and established two-way contacts may send
+// without a person). Anything else is HELD for a PERSON signed in to the
+// RadMail app. This client can only report which of three things happened:
 //
 //   sent     — RadMail's gate released it; it left the owner's mailbox.
 //   held     — waiting for a person. We hand back a link to the app page.
 //              `handoff: true` means a HUMAN-ONLY hold (money, changed banking,
 //              a decision, injected instructions, a first message to someone
-//              new): nobody releases it in RadMail; a person copies the draft
-//              and sends it from their own mail. `handoff: null` = not known
-//              (a duplicate of an earlier hold — the app page says which).
+//              new): nobody releases it in RadMail; a person either sends the
+//              draft from their own mail or discards it. `handoff: null` = not
+//              known (a duplicate of an earlier hold, or a server that did not
+//              say) — the app page says which.
 //   refused  — not sent and not held (bad input, switched off, no key, …).
 //
 // ── WHAT THIS FILE MUST NEVER DO ────────────────────────────────────────────
@@ -153,7 +154,7 @@ export function mapSendResponse(status: number, body: Record<string, unknown> | 
       holdReasons: strList(b.holdReasons),
       reviewUrl: reviewUrlFor(apiUrl, b.reviewPath),
       expiresAt: str(b.expiresAt),
-      handoff: b.handoff === true,
+      handoff: typeof b.handoff === "boolean" ? b.handoff : null,
       handoffClasses: b.handoff === true ? handoffClassList(b.handoffClasses) : [],
       duplicate: false,
     };

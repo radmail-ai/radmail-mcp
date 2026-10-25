@@ -15,8 +15,8 @@ export const SEND_TOOL_MANIFEST: FrozenManifest = {
   "tools": [
     {
       "name": "send_email",
-      "sha256": "f015785ebfe1559deced8d56a20fe66bfbe55da16ec3e0d657a685d19cfc2d3d"
+      "sha256": "00fc22f6c5569c377806620c41e17251e7263c14b95c587746ecbe0762923b57"
     }
   ],
-  "manifestSha256": "acfef8b99182a27165f8230bf86ad9829a99f403d39a2919910bc8458faa2bf1"
+  "manifestSha256": "378067c17a42ba24d262a87262e97a2a6d11df2f443cc75e2904900f9a32c5c6"
 };
