@@ -91,7 +91,9 @@ export const SAFETY_BLOCK_SEND_ENABLED = Object.freeze({
   sendSurface:
     "This server has the opt-in send_email tool turned on. It hands mail to RadMail's outbound gate, which sends at once " +
     "only to the owner's own team or an established two-way contact and HOLDS everything else for the owner to release " +
-    "in the RadMail app. No tool on this server can release a held send. Every other tool here is read-only.",
+    "in the RadMail app. Money / changed-banking / first-contact / decision / injection mail is handed to a person to send " +
+    "from their own mail (handoff: true); RadMail never sends it. No tool on this server can release a held send. " +
+    "Every other tool here is read-only.",
   taintNotice: SAFETY_BLOCK.taintNotice,
 } as const);
 

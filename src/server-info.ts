@@ -36,8 +36,9 @@ export const SEND_INSTRUCTIONS_ADDENDUM =
   "SEND (opt-in, this server only): the operator turned on `send_email`, so the sentence above about never sending " +
   "does not hold here. `send_email` hands mail to RadMail's outbound gate: it sends at once only to the owner's own " +
   "team or an established two-way contact, and HOLDS everything else for the owner to release in the RadMail app. " +
-  "No tool can release a hold. Money / changed-banking / first-contact / decision / injection and regulator / " +
-  "government / court / bank recipients always hold.";
+  "No tool can release a hold. Regulator / government / court / bank recipients always hold. Money / changed-banking / " +
+  "first-contact / decision / injection mail comes back held with handoff: true: a person sends it from their own mail, " +
+  "and nobody releases it in RadMail.";
 
 /**
  * Appended ONLY on a local server where the operator turned on the inbox-action

@@ -11,12 +11,12 @@ export const SEND_TOOL_MANIFEST: FrozenManifest = {
   "version": 1,
   "algorithm": "sha256/canonical-json/zod-to-json-schema",
   "converterVersion": "3.25.2",
-  "serverInstructionsSha256": "9fafa962bc57f7a52bbd4a3b5b97ce2a1ded477c8175cdc37aafdc8ba3aad7d8",
+  "serverInstructionsSha256": "a57a7951f9d143bbc54f922f463806202453cac7b9d74509d00393e335aafd13",
   "tools": [
     {
       "name": "send_email",
-      "sha256": "1b121437a0158ab1b0c18494b7d3c50d44a87b23237b5c4b9016beb67a48ee2a"
+      "sha256": "00fc22f6c5569c377806620c41e17251e7263c14b95c587746ecbe0762923b57"
     }
   ],
-  "manifestSha256": "fee8df74656ae823eb253648d774ebdb860d40b772ee094d96d9a8011d3dd8f3"
+  "manifestSha256": "378067c17a42ba24d262a87262e97a2a6d11df2f443cc75e2904900f9a32c5c6"
 };

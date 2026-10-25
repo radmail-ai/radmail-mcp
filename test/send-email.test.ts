@@ -108,6 +108,71 @@ describe("outcomes", () => {
     assert.match(String(r.note), /no tool can release it/);
   });
 
+  test("hand-off: a human-only hold tells the agent a PERSON sends it, never to release it", async () => {
+    serve(() =>
+      json(
+        {
+          ok: true,
+          status: "held",
+          requestId: REQ,
+          tier: "hard_stop",
+          holdReasons: ["money: wire instructions"],
+          reviewPath: `/sends/${REQ}`,
+          expiresAt: "2026-10-04T00:00:00.000Z",
+          handoff: true,
+          handoffClasses: ["money", "changed-banking", "not-a-class"],
+        },
+        202,
+      ),
+    );
+    const r = (await sendEmailTool(ARGS)) as Record<string, unknown>;
+    assert.equal(r.outcome, "held");
+    assert.equal(r.handoff, true);
+    assert.deepEqual(r.handoffClasses, ["money", "changed-banking"], "only known class names are copied");
+    assert.match(String(r.note), /HANDED TO A PERSON/);
+    assert.match(String(r.note), /copy the draft into their own mail and send it, or discard it/);
+    assert.match(String(r.note), /checks to make first/);
+    assert.match(String(r.note), /Do not tell them to release it/);
+    assert.doesNotMatch(String(r.note), /releases or discards it/);
+  });
+
+  test("CONTROL: an ordinary hold (handoff:false) still says the owner releases it", async () => {
+    serve(() =>
+      json({ ok: true, status: "held", requestId: REQ, tier: "review", reviewPath: `/sends/${REQ}`, handoff: false, handoffClasses: ["money"] }, 202),
+    );
+    const r = (await sendEmailTool(ARGS)) as Record<string, unknown>;
+    assert.equal(r.handoff, false);
+    assert.deepEqual(r.handoffClasses, [], "classes are only reported on a hand-off");
+    assert.match(String(r.note), /releases or discards it/);
+    assert.doesNotMatch(String(r.note), /HANDED TO A PERSON/);
+  });
+
+  test("a hold with no handoff field is UNKNOWN, never a hand-off and never an owner release", async () => {
+    const m = mapSendResponse(202, { ok: true, status: "held", requestId: REQ, reviewPath: `/sends/${REQ}` }, API);
+    assert.equal(m.outcome, "held");
+    assert.equal((m as { handoff: boolean | null }).handoff, null);
+    const odd = mapSendResponse(202, { ok: true, status: "held", requestId: REQ, handoff: "true" }, API);
+    assert.equal((odd as { handoff: boolean | null }).handoff, null, "a non-boolean is not a yes");
+    serve(() => json({ ok: true, status: "held", requestId: REQ, reviewPath: `/sends/${REQ}` }, 202));
+    const r = (await sendEmailTool(ARGS)) as Record<string, unknown>;
+    assert.match(String(r.note), /the page says whether they release it there or send it themselves/);
+  });
+
+  test("duplicate of a held request: hand-off unknown, and the note says the page decides", async () => {
+    serve(() => json({ ok: true, status: "duplicate", requestId: REQ, priorStatus: "held" }, 200));
+    const r = (await sendEmailTool(ARGS)) as Record<string, unknown>;
+    assert.equal(r.outcome, "held");
+    assert.equal(r.handoff, null);
+    assert.match(String(r.note), /the page says whether they release it there or send it themselves/);
+  });
+
+  test("duplicate of a handed-off request: not re-sent, and says a person has it", () => {
+    const r = mapSendResponse(200, { ok: true, status: "duplicate", requestId: REQ, priorStatus: "handed_off" }, API);
+    assert.equal(r.outcome, "refused");
+    assert.equal((r as { error: string }).error, "duplicate_of_handed_off");
+    assert.match(String((r as { detail: string }).detail), /handed to a person/);
+  });
+
   test("held: a reviewPath that is not a /sends link is replaced, never followed", () => {
     assert.equal(reviewUrlFor(API, `/api/v1/send/${REQ}/confirm`), `${API}/sends`);
     assert.equal(reviewUrlFor(API, "https://evil.example/sends/x"), `${API}/sends`);
