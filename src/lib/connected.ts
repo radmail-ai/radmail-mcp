@@ -225,6 +225,137 @@ export async function getEmail(id: string, cfg: ConnectedConfig): Promise<Remote
   return (body.data as RemoteEmailDetail | undefined) ?? null;
 }
 
+/** One attachment's bytes from GET /api/v1/emails/{id}/attachments/{index}. */
+export interface RemoteAttachment {
+  bytes: Buffer;
+  /** From Content-Disposition. UNTRUSTED: the sender chose it. */
+  filename: string | null;
+  contentType: string | null;
+}
+
+/** A refusal the server explained (403/404/409/413/501…). The code and message are the server's own. */
+export interface RemoteAttachmentRefusal {
+  refused: true;
+  status: number;
+  error: string;
+  message: string;
+}
+
+function filenameFromDisposition(h: string | null): string | null {
+  if (!h) return null;
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(h);
+  if (star) {
+    try {
+      return decodeURIComponent(star[1].trim());
+    } catch {
+      /* fall through to the plain form */
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(h);
+  return plain ? plain[1].trim() : null;
+}
+
+/** Largest attachment this client will accept: the server's own hard ceiling (25 MB). */
+export const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
+/** One deadline for the WHOLE download, headers and body (review of #21: the
+ *  request timer used to stop at the headers, so a stalled body hung forever). */
+export const ATTACHMENT_TIMEOUT_MS = 60_000;
+let attachmentTimeoutMs = ATTACHMENT_TIMEOUT_MS;
+/** Test-only: shorten the download deadline (pass null to restore). */
+export function __setAttachmentTimeoutForTests(ms: number | null): void {
+  attachmentTimeoutMs = ms ?? ATTACHMENT_TIMEOUT_MS;
+}
+
+/** Read a body up to `max` bytes; throws ConnectedApiError("api") past the cap. */
+async function readCapped(res: Response, max: number, path: string): Promise<Buffer> {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > max) {
+    throw new ConnectedApiError("api", `The attachment is larger than ${max} bytes (GET ${path}). Nothing was saved.`, res.status);
+  }
+  if (!res.body) return Buffer.alloc(0);
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => {});
+      throw new ConnectedApiError("api", `The attachment is larger than ${max} bytes (GET ${path}). Nothing was saved.`, res.status);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+
+/**
+ * GET /api/v1/emails/{id}/attachments/{index} — one attachment's bytes, which
+ * the RadMail server fetches from the mail provider for this request and does
+ * not store. Every gate is the server's (attachments:read + mailbox-confined
+ * key, sender allowlist, regime, size cap); a refusal comes back as a
+ * RemoteAttachmentRefusal carrying the server's own reason, never as bytes.
+ * 401 and network/timeout failures throw ConnectedApiError like every other read.
+ */
+export async function getAttachment(
+  id: string,
+  index: number,
+  cfg: ConnectedConfig,
+): Promise<RemoteAttachment | RemoteAttachmentRefusal> {
+  const path = `/api/v1/emails/${encodeURIComponent(id)}/attachments/${index}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), attachmentTimeoutMs);
+  const timeoutError = () =>
+    new ConnectedApiError("timeout", `The attachment did not arrive within ${attachmentTimeoutMs / 1000}s (GET ${path}). Nothing was saved.`);
+  try {
+  let res: Response;
+  try {
+    res = await fetchImpl(`${cfg.apiUrl}${path}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${cfg.apiKey}` },
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    if (isAbortError(e)) throw timeoutError();
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new ConnectedApiError("network", `Could not reach the RadMail API at ${cfg.apiUrl} (${detail}). Nothing was fetched.`);
+  }
+  if (res.status === 401) {
+    throw new ConnectedApiError(
+      "auth",
+      `RadMail API key rejected (401): the key is invalid, revoked, or mistyped. Manage keys at ${API_KEYS_URL}. Nothing was fetched.`,
+      401,
+    );
+  }
+  if (!res.ok) {
+    let error = `http_${res.status}`;
+    let message = `RadMail API refused the attachment (HTTP ${res.status}).`;
+    try {
+      const body = (await res.json()) as Record<string, unknown>;
+      if (typeof body.error === "string") error = body.error;
+      if (typeof body.message === "string") message = body.message;
+    } catch {
+      /* a non-JSON refusal keeps the generic message */
+    }
+    return { refused: true, status: res.status, error, message };
+  }
+  let bytes: Buffer;
+  try {
+    bytes = await readCapped(res, ATTACHMENT_MAX_BYTES, path);
+  } catch (e) {
+    if (isAbortError(e)) throw timeoutError();
+    throw e;
+  }
+  return {
+    bytes,
+    filename: filenameFromDisposition(res.headers.get("content-disposition")),
+    contentType: res.headers.get("content-type"),
+  };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Shared pagination params for the list endpoints. */
 export interface RemotePageParams {
   limit?: number;

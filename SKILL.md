@@ -36,6 +36,7 @@ claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
 | `list_commitments` | Open promises in the thread(s) + their due window. |
 | `search` | Find a message by sender / subject / content. |
 | `read_email` | Fetch a full email (connected-inbox mode only). |
+| `get_attachment` | Save one attachment from a real email to a local folder (connected-inbox mode only). |
 | `triage` | Score a single message you pass in (importance × urgency). |
 | `provision_sandbox` | Mint a free sandbox tenant (auto-called on first sandbox use). |
 | `report_need` / `request_capability` | Send RadMail a missing-capability / feedback signal. |
