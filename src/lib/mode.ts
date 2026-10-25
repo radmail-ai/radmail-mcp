@@ -11,6 +11,8 @@
 // One derivation, used by every entry point (stdio, http, index), so the three
 // banners cannot disagree with each other or with tools.ts's own check.
 
+import { triageToolsEnabled } from "./inbox-actions.js";
+
 export type EngineMode = "connected" | "sandbox";
 
 /** Same predicate tools.ts uses: a non-empty RADMAIL_API_KEY means connected. */
@@ -19,10 +21,16 @@ export function engineMode(env: NodeJS.ProcessEnv = process.env): EngineMode {
   return typeof k === "string" && k.trim().length > 0 ? "connected" : "sandbox";
 }
 
-/** The startup line. Never prints the key — only that one is present. */
+/** The startup line. Never prints a key — only that one is present. */
 export function startupBanner(transport: string, env: NodeJS.ProcessEnv = process.env): string {
   const mode = engineMode(env);
-  return mode === "connected"
-    ? `radmail-mcp CONNECTED to a real inbox (read-only, RADMAIL_API_KEY present) ${transport}`
-    : `radmail-mcp (sandbox engine — no RADMAIL_API_KEY, demo tenant only) ${transport}`;
+  const base =
+    mode === "connected"
+      ? `radmail-mcp CONNECTED to a real inbox (read-only, RADMAIL_API_KEY present) ${transport}`
+      : `radmail-mcp (sandbox engine — no RADMAIL_API_KEY, demo tenant only) ${transport}`;
+  // The SAME predicate the entries use to register the inbox-action tools: an
+  // operator reading the launch log must see that this server can change mail.
+  return triageToolsEnabled(env)
+    ? `${base} — INBOX ACTIONS ON (archive / snooze / read state / labels via a separate RADMAIL_TRIAGE_API_KEY; never trash, delete or send)`
+    : base;
 }

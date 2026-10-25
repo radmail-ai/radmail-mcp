@@ -46,13 +46,19 @@ Call `triage_inbox` and **omit the token** — RadMail auto-provisions a free sa
 | `draft_reply` | Draft the reply that discharges a commitment — **never** for a hard-stopped one (money / banking / first-contact stay human-only). |
 | `list_commitments` | Open promises with their due window. Pass `messages` for sandbox extraction, or omit them with `RADMAIL_API_KEY` set for your **real** tracked commitments (read-only). |
 | `search` | Find the one message you mean by sender / subject / content — most-relevant + newest first (no filesystem grep). Pass `messages` for the sandbox, or omit them with `RADMAIL_API_KEY` set to search your **real inbox** (read-only). |
-| `read_email` | **Connected mode only:** fetch one full email (headers + `textBody`) from your real inbox by id. Read-only; body content arrives taint-tagged. |
+| `read_email` | **Connected mode only:** fetch one full email (headers + `textBody` + attachment names) from your real inbox by RadMail's `id`; returns `rfcMessageId`, the RFC 5322 Message-ID a reply threads on. Read-only; body content arrives taint-tagged. |
+| `read_thread` | **Connected mode only:** one conversation by `threadId` — the thread and its received emails oldest first, each with `id`, `rfcMessageId` and `inReplyTo`. Metadata only; `coverage` says what is left out. Read-only. |
+| `list_emails` | **Connected mode only:** your real inbox newest first, metadata only, with `since` and a `nextCursor` for polling. Fails closed on a RadMail deployment too old to honour `since` / `cursor`. Read-only. |
+| `list_prepared_drafts` | **Connected mode only:** RadMail's own AI-prepared reply drafts (optionally for one `emailId`). Read-only — RadMail never sends a prepared draft on its own. |
+| `list_watched_threads` | **Connected mode only:** the threads you watch, with who spoke last (`me_last` / `them_last` / `unknown`) and a `stalled` flag. Read-only. |
 | `get_attachment` | **Connected mode only:** save one file attached to a real email to `RADMAIL_ATTACHMENT_DIR` and return its path. Read-only; the server decides whether the file may be served (key scope, mailbox, sender allowlist, size cap). |
 | `check_send_domain` | **Zero-auth**, works on any domain: read-only SPF / DKIM / DMARC health read (verdicts + raw records + plain-language advice). Probes the common DKIM selectors (`default`, `google`, `resend`, `sendgrid`, `mail`, `k1`, `s1`, `s2`). Read-only DNS — no key, no send capability. |
 | `triage` | Score a single message (the per-message form of `triage_inbox`). |
 | `provision_sandbox` | Explicitly mint a free sandbox tenant. |
 | `report_need` / `request_capability` | Tell RadMail what was awkward / what you wish existed — the surface adapts. |
 | `radmail_learning_insights` | What RadMail has learned about how you work. |
+
+Two opt-in surfaces add tools on a **local** server only, never on a hosted one: `send_email` (see *Opt-in: sending*) and five inbox actions — `archive_email`, `snooze_email`, `mark_read`, `label_email`, `act_on_emails` (see *Opt-in: inbox actions*). Every connected read tool is annotated `readOnlyHint: true` — except `get_attachment`, which writes a file on the local machine and so carries no read-only claim; the annotations are inside the frozen manifest, so flipping one fails the startup check like a description edit would.
 
 ### "How many tools?" — and the second number that matters more
 
@@ -63,10 +69,11 @@ RadMail publishes both, as dated observations you can reproduce against any MCP 
 | Tier | Tools | Send-capable |
 |---|---|---|
 | Hosted zero-auth sandbox (`https://radmail.ai/api/mcp/sandbox`) | **6** | **0** |
-| This npm package, default | **13** | **0** |
-| This npm package with `RADMAIL_SEND_TOOL=1` (local stdio only) | **14** | **1** — `send_email`, which hands mail to RadMail's outbound gate and cannot release a hold |
+| This package at 0.6.0, default (also this package's hosted `/api/mcp`, with or without a bearer) | **18** | **0** |
+| … with `RADMAIL_SEND_TOOL=1` (local stdio only) | **19** | **1** — `send_email`, which hands mail to RadMail's outbound gate and cannot release a hold |
+| … with the opt-in inbox actions (local stdio only) | **23** | **0** — the five added tools change inbox state (archive, snooze, read state, labels); none sends, trashes or deletes |
 
-Observed **2026-10-09**. Reproduce row 1 with the `tools/list` command under *Verify before you connect*. Reproduce row 2 from the frozen manifest — the surface the server refuses to deviate from:
+Row 1 observed **2026-10-09**; rows 2-4 read from this repository's frozen manifests at 0.6.0 (2026-10-25), which is **not yet on npm** — the published 0.5.0 predates `send_email`, the inbox actions and the 0.6.0 read tools. Reproduce row 1 with the `tools/list` command under *Verify before you connect*. Reproduce row 2 from the frozen manifest — the surface the server refuses to deviate from (`src/send-tool-manifest.ts` and `src/triage-tool-manifest.ts` hold the opt-in rows):
 
 ```bash
 node -e 'const s=require("fs").readFileSync("src/tool-manifest.ts","utf8");
@@ -91,7 +98,7 @@ RadMail is none of those three cleanly, which is why a round-up built on them ha
 That is a boundary rather than a feature list, so it is checkable — in about a minute, without an account:
 
 - **The agent does not own the mailbox.** The hosted endpoint takes no credential and serves a fixed demo inbox. Shape 2 needs an address of its own; shape 3 needs your OAuth grant. RadMail asks for neither to be evaluated.
-- **Connected mode is read-only.** With `RADMAIL_API_KEY` set, `search` / `read_email` / `list_right_now` / `list_commitments` read your real mail; none of them writes or sends.
+- **Connected mode is read-only by default.** With `RADMAIL_API_KEY` set, the connected tools (`search`, `read_email`, `read_thread`, `list_emails`, `list_right_now`, `list_commitments`, `list_prepared_drafts`, `list_watched_threads`) read your real mail; none of them writes or sends. An operator can additionally turn on five local-only inbox actions (archive, snooze, read state, labels) — reversible, and none of them deletes or sends.
 - **The send verb is absent from every hosted endpoint** — `0` send-capable tools, reproducible with the `tools/list` command under *Verify before you connect*. Sending exists only as an opt-in local tool, and even then it cannot release a held message.
 
 **And the honest cost of being a fourth shape:** if what you need is an agent that owns an address and answers mail with no person in the loop, shape 2 is the right choice and RadMail is the wrong tool — it will refuse precisely the things you would be hiring it to do. RadMail is built for the mailbox a business actually runs on, where being argued into sending *is* the attack.
@@ -173,7 +180,7 @@ curl -s -X POST https://radmail.ai/api/mcp/sandbox \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-Read the names back. There is no `send`, no `send_email`, no `pay`, no `update_banking` — and that absence *is* the enforcement. (One exception, and only where an operator chose it: a **local** stdio server started with `RADMAIL_SEND_TOOL=1` also lists `send_email` — see *Opt-in: sending* below. The hosted endpoints never do.) Observed on the hosted sandbox **2026-10-09: 6 tools** — `triage_inbox`, `list_right_now`, `why_surfaced`, `list_commitments`, `draft_reply`, `search`. That is a dated observation of the **hosted sandbox tier**, not a ceiling: the local stdio package exposes the fuller set in the table above. Re-run the command rather than trusting this line.
+Read the names back. There is no `send`, no `send_email`, no `pay`, no `update_banking` — and that absence *is* the enforcement. (One exception, and only where an operator chose it: a **local** stdio server started with `RADMAIL_SEND_TOOL=1` also lists `send_email` — see *Opt-in: sending* below. Likewise a local server with `RADMAIL_TRIAGE_TOOLS=1` and a triage key lists the five inbox actions, none of which sends or deletes. The hosted endpoints never list either.) Observed on the hosted sandbox **2026-10-09: 6 tools** — `triage_inbox`, `list_right_now`, `why_surfaced`, `list_commitments`, `draft_reply`, `search`. That is a dated observation of the **hosted sandbox tier**, not a ceiling: the local stdio package exposes the fuller set in the table above. Re-run the command rather than trusting this line.
 
 **And the one claim you cannot check from the outside — check it in the source.** The strongest sentence in this README is *"no tool can release a held send"* (below, under *Opt-in: sending*). A paragraph is not evidence, and that claim is the one a hosted `tools/list` cannot reach, because the send tool is not on the hosted tier at all. It is asserted by a test in this repo — so run the test instead of believing the paragraph:
 
@@ -297,24 +304,50 @@ The honest shape of it: **the advisory is a true statement about our text and a 
 
 Or from source: `git clone https://github.com/radmail-ai/radmail-mcp && npm i && npm run build && npm start` (stdio). Hosted deploy: Vercel Node serverless function (`api/mcp.ts`; `/` rewrites to the MCP handler).
 
+> **What the published package does not have yet (checked 2026-10-25: `npm view radmail-mcp dist-tags` → `latest: 0.5.0`, published 2026-08-11).** `send_email`, the five inbox actions, `get_attachment`, the 0.6.0 read tools (`read_thread`, `list_emails`, `list_prepared_drafts`, `list_watched_threads`) and the hosted bearer preview are all newer than that tarball. They ship in the next release, **0.6.0, which is not published yet**. Until it is, run from source — `git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm ci && npm run build` — and point your client at `node /absolute/path/to/radmail-mcp/dist/src/index.js` instead of `npx -y radmail-mcp`. The commands below show the `npx` form because that is what works once 0.6.0 is published; with 0.5.0 they start a server without those tools.
+
 ## Connected mode — your real inbox
 
-Give the server a RadMail API key and **four tools** stop being a demo. Omit `messages` and:
+Give the server a RadMail API key and the connected tools stop being a demo. Omit `messages` and:
 
-- `search` finds **any email you've ever received** in your real RadMail inbox;
-- `read_email` fetches the full message (headers + `textBody`);
+- `search` finds **any email you've ever received** in your real RadMail inbox (page with `offset`; each response carries `nextOffset`);
+- `read_email` fetches the full message (headers + `textBody` + attachment names);
+- `read_thread` shows **the conversation** a message belongs to — its emails oldest first, each with `rfcMessageId` and `inReplyTo`;
+- `list_emails` walks your inbox newest first by **`since` + `nextCursor`** — the polling shape, where new mail arriving mid-walk cannot shift a page;
 - `list_right_now` returns your **real can't-miss lane** — the live engine's band + importance + urgency + reasons per item;
-- `list_commitments` lists your **real open promises** — direction (`owed_by_us` / `owed_to_us`), party, action, due date/phrase, state, confidence.
+- `list_commitments` lists your **real open promises** — direction (`owed_by_us` / `owed_to_us`), party, action, due date/phrase, state, confidence, and the `emailId` / `threadId` each was found in;
+- `list_prepared_drafts` shows **RadMail's own prepared reply drafts** (never auto-sent);
+- `list_watched_threads` lists the threads you watch and who spoke last.
+
+**Ids, named honestly (changed in 0.6.0).** In every connected result `id` is RadMail's own id — pass it to `read_email` / `get_attachment` — and `rfcMessageId` is the RFC 5322 Message-ID a reply threads on (`send_email`'s `inReplyTo`). Until 0.6.0 the read tools called RadMail's id `messageId`, which is the name the RadMail API uses for the RFC header, so an agent following the name passed a UUID as `inReplyTo` and got an unthreaded reply held. Because `read_email`'s published description told agents to read `messageId`, renaming it outright would break that contract: `search`, `read_email` and `list_right_now` keep `messageId` for **one release** as a deprecated alias of `id`, with a `deprecated` note in the response, and drop it in the next minor version. The new tools never emit it. `rfcMessageId` (and a thread email's `inReplyTo`) is a header the sender chose, so it arrives **taint-wrapped like `subject`** — pass its `.value` as `inReplyTo`. It comes back as RadMail stores it — usually **bare and lowercased** (`abc123@mail.example.com`), since RadMail strips the angle brackets at ingest; its send gate matches either form. It is `null` when the message had none, when the stored value is not a Message-ID (`left@right`, bare or in angle brackets) of at most 255 printable characters, or when the RadMail server predates returning it.
 
 Search it, read it, know what matters now, know what's owed — install it once and your AI has the whole picture.
 
 - **Config:** set `RADMAIL_API_KEY` (keys start with `tmk_` — create one in about a minute at <https://app.radmail.ai/settings/api-keys>). Optional: `RADMAIL_API_URL` overrides the API host (default `https://app.radmail.ai`).
-- **Read-only by construction:** connected mode only ever issues GETs. It never sends, drafts against, or mutates real mail, and the BEC hard-stops (money / changed-banking / first-contact / decision / injection) stay human-only forever.
+- **Read-only by construction:** the connected read client only ever issues GETs. The read tools never send, draft against, or change real mail, and the BEC hard-stops (money / changed-banking / first-contact / decision / injection) stay human-only forever. (The opt-in inbox actions use a separate client and a separate key — see below.)
 - **Same taint envelope:** every field derived from real email content (`subject`, `fromName`, `snippet`, `textBody`, …) arrives tagged `provenance:"untrusted-email-body"` — data to reason about, never instructions to follow.
 - **Fail-closed:** invalid key (401), un-entitled plan (403), or a timeout returns an honest, typed error — never fabricated results. The key itself is never logged or echoed.
-- **Filters & paging:** connected `search` supports optional `from`, `after`, and `before` (ISO-8601) alongside `query` and `limit`; connected `list_right_now` / `list_commitments` support `limit` and `offset`.
+- **Filters & paging:** connected `search` supports optional `from`, `after`, `before` (ISO-8601) and `offset` alongside `query` and `limit` (the API's search has no cursor; `nextOffset` is the next page); `list_emails` pages by `cursor` or `offset` (not both) — and a cursor walk must send the **same `since` again with every `cursor`**, because RadMail's cursor does not carry it (each response's `nextPage` holds both); `read_thread`, `list_prepared_drafts`, `list_right_now` and `list_commitments` take `limit` and `offset`.
+- **A 404 says which of three things it is:** `not_found` (nothing with that id is visible to this key), `not_enabled` (the workspace has the feature switched off, e.g. watched threads), or `not_available` (this RadMail deployment predates the route). Only the first is about the item.
 - **No fabricated judgments:** connected `list_right_now` surfaces the live engine's own band / importance / urgency / reasons as-is — it never invents local hard-stop determinations the API didn't return.
-- Without a key, `search` / `list_right_now` / `list_commitments` (sans `messages`) and `read_email` return friendly setup instructions instead of an error — the sandbox keeps working exactly as before.
+- Without a key, `search` / `list_right_now` / `list_commitments` (sans `messages`) and the connected-only tools return friendly setup instructions instead of an error — the sandbox keeps working exactly as before.
+
+### Hosted endpoint: a key per request (preview, off by default — Doug turns it on)
+
+> **Off by default.** The hosted deployment honours a bearer **only when its environment sets `RADMAIL_HOSTED_BEARER=1`** (exactly `1`). Nothing in this repository sets it, and Doug switches it on. While it is off, the hosted endpoint behaves as it did before this preview existed: a bearer is ignored, nothing is refused with 401, and every request is sandbox-only — so deploying this code adds no new capability until the flag is set. `GET /api/mcp` reports `connectedPreview.enabled`.
+
+When it is on, this package's own hosted deployment (`api/mcp.ts`) accepts a RadMail key **on each request** — so a remote MCP client can reach a real inbox without running a local process:
+
+```text
+POST /api/mcp
+Authorization: Bearer tmk_live_…        (or tmk_test_…)
+```
+
+- **That request's** connected read tools use **that** key, and nothing else does. The deployment holds no key: a request without a bearer is sandbox-only exactly as before, even if `RADMAIL_API_KEY` happens to be set in the deployment's environment.
+- **Read tools only.** No `send_email` and no inbox action is registered on the hosted endpoint, with or without a key, whatever its environment says. `get_attachment` refuses there (it saves files on the machine running the server).
+- **The key is never logged, echoed, or put in a response** — not even its prefix, and it is not sent to telemetry.
+- With the preview on, a bearer that starts like a RadMail key but is malformed is refused with HTTP 401 (it names the expected shape, never the value), so a typo is never silently served the demo inbox. A bearer that is not a RadMail key at all is ignored, as before.
+- **Preview:** there is no OAuth yet — the client must be able to send a custom header — and the endpoint keeps its per-IP rate limit (60 requests/min). `GET /api/mcp` reports `connectedPreview` alongside the manifest check.
 
 ### The live engine is owner-taught
 
@@ -367,9 +400,13 @@ claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
 
 ## Opt-in: sending (local stdio only)
 
+> **Not in the published npm package yet.** `send_email` was added after `radmail-mcp@0.5.0` (npm `latest`, published 2026-08-11), so `npx -y radmail-mcp` with the variables below starts a server that does **not** list `send_email`. It ships in the next release (0.6.0, not yet published). Until then, run from source: `git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm ci && npm run build`, and replace `npx -y radmail-mcp` below with `node /absolute/path/to/radmail-mcp/dist/src/index.js`.
+
 Off by default, absent from the hosted endpoints, and present on a local server only when its operator sets **both**:
 
 ```bash
+git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm ci && npm run build
+
 # RADMAIL_API_KEY       the read key (search / read_email / right-now) — never used to send
 # RADMAIL_SEND_TOOL=1   lists send_email on THIS server
 # RADMAIL_SEND_API_KEY  a separate key with the send scope, ideally confined to one mailbox
@@ -377,7 +414,7 @@ claude mcp add radmail \
   -e RADMAIL_API_KEY=tmk_... \
   -e RADMAIL_SEND_TOOL=1 \
   -e RADMAIL_SEND_API_KEY=tmk_... \
-  -- npx -y radmail-mcp
+  -- node /absolute/path/to/radmail-mcp/dist/src/index.js     # `npx -y radmail-mcp` once 0.6.0 is published
 ```
 
 `send_email` hands the email to RadMail's outbound gate (`POST /api/v1/send`) and reports one of three outcomes:
@@ -393,6 +430,44 @@ claude mcp add radmail \
 ⚖️ **Be exact about what this changes.** On a server with sending turned on, the *capability-absent* label above no longer describes sending: the capability exists and is narrowed by configuration (`config-restricted`), and a held send is a person approving a request. The five hard-stopped classes still cannot leave without that person. The safety block on every response says which kind of server you are talking to: a send-enabled server replaces the "never sends mail" sentence with a `sendSurface` statement rather than leaving a false one in place.
 
 The tool's description asks the agent to run its own correspondence review on the exact text before sending to anyone outside the owner's team — RadMail's gate catches machine-written tells and unthreaded replies, but it is not a substitute for a voice review.
+
+## Opt-in: inbox actions (local stdio only)
+
+Off by default, absent from every hosted endpoint, and registered on a local server only when its operator sets **both** (either alone registers nothing):
+
+These tools are newer than the published npm package (0.5.0), so run this server from source until 0.6.0 is published:
+
+```bash
+git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm ci && npm run build
+
+# RADMAIL_TRIAGE_TOOLS=1   lists the five inbox-action tools on THIS server
+# RADMAIL_TRIAGE_API_KEY   a separate key with the `triage` scope, ideally confined to one mailbox
+#                          (RADMAIL_API_KEY, the read key, is never used to change mail)
+claude mcp add radmail \
+  -e RADMAIL_API_KEY=tmk_... \
+  -e RADMAIL_TRIAGE_TOOLS=1 \
+  -e RADMAIL_TRIAGE_API_KEY=tmk_... \
+  -- node /absolute/path/to/radmail-mcp/dist/src/index.js
+```
+
+Once 0.6.0 is on npm, `-- npx -y radmail-mcp` in place of the `node` line does the same; with 0.5.0 it starts a server without these tools.
+
+| tool | what it does |
+|---|---|
+| `archive_email` | Archive one email (`archived: false` moves it back). |
+| `snooze_email` | Snooze one email until an ISO 8601 date-time **with a zone** (`snoozed: false` wakes it). Snooze lives in RadMail; the provider mailbox is not changed. |
+| `mark_read` | Mark one email read (`read: false` marks it unread). |
+| `label_email` | Add (`on: true`) or remove (`on: false`) a label the mailbox **already has** — a Gmail label or an Outlook category. Never creates one. |
+| `act_on_emails` | Up to 50 of the above in one call. Items run in order; one refusal never fails the rest — read each item's `ok` / `status` and the `summary`. |
+
+They call RadMail's v1 actions API (`POST /api/v1/emails/{id}/actions`, `POST /api/v1/emails/actions`), which makes the same change a person makes in RadMail, writes it back to the Gmail / Outlook mailbox when the workspace has write-back on, checks the key's `triage` scope, its mailbox confinement and the minting member's mailbox access, and audits every change under that member and the key.
+
+- **No trash, no delete, no send.** The action vocabulary is closed (`archive | unarchive | snooze | unsnooze | mark_read | mark_unread | label`), the batch schema rejects anything else, and RadMail refuses those verbs on its side too.
+- **Reversible and idempotent.** Every change has its inverse among the tools, and asking for the state a message is already in returns `changed: false`, writes nothing and contacts no mailbox — so a retry after a timeout is safe. Annotated `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true`. `destructiveHint` is `true` because the MCP spec reserves `false` for tools that make *only additive* updates, and archiving, marking read or removing a label changes existing state — so a client that skips confirmation for non-destructive tools does not skip it here. It does not mean anything is deleted.
+- **"Not enabled" is not an error about the email.** While the RadMail workspace has the feature switched off, each tool answers `outcome: "not_enabled"` — *"inbox actions are not enabled on this RadMail workspace yet"* — and nothing changed. A `not_found` (the id is not visible to this key) is reported separately.
+- **The server says what it is.** On such a server the `safety` block gains a `triageSurface` sentence, the instructions gain an addendum, and the startup line reads `INBOX ACTIONS ON`. Default servers keep all three byte for byte.
+
+Check the no-delete claim rather than reading it: `RADMAIL_TELEMETRY=off node --test --import tsx --test-name-pattern="no trash or delete" test/inbox-actions.test.ts`.
 
 ## Telemetry (demand signals — opt-out)
 

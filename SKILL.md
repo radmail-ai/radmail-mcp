@@ -35,7 +35,11 @@ claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
 | `draft_reply` | Draft a reply that discharges a commitment. **Refuses** money / banking-change / first-contact. |
 | `list_commitments` | Open promises in the thread(s) + their due window. |
 | `search` | Find a message by sender / subject / content. |
-| `read_email` | Fetch a full email (connected-inbox mode only). |
+| `read_email` | Fetch a full email by its `id` (connected-inbox mode only); `rfcMessageId` is the header a reply threads on. |
+| `read_thread` | The whole conversation for a `threadId`, oldest first, metadata only (connected-inbox mode only). |
+| `list_emails` | The inbox newest first, with `since` + `nextCursor` for polling (connected-inbox mode only). |
+| `list_prepared_drafts` | RadMail's own prepared reply drafts — never auto-sent (connected-inbox mode only). |
+| `list_watched_threads` | Watched threads and who spoke last (connected-inbox mode only). |
 | `get_attachment` | Save one attachment from a real email to a local folder (connected-inbox mode only). |
 | `triage` | Score a single message you pass in (importance × urgency). |
 | `provision_sandbox` | Mint a free sandbox tenant (auto-called on first sandbox use). |
@@ -47,7 +51,7 @@ claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
 1. Call `triage_inbox` → get the Right Now lane, commitments, and any hard-stop flags in one shot.
 2. For anything unclear, call `why_surfaced` to get the reasoning before you act.
 3. To respond, call `draft_reply` — **read the response.** If RadMail returns a *refusal* (money / new banking / first-contact / decision), that is not an error to route around: **stop and hand it to the human.** There is no tool that will auto-send it, by design.
-4. Use `list_commitments` to make sure no promised follow-up is dropped; `search` / `read_email` to pull context.
+4. Use `list_commitments` to make sure no promised follow-up is dropped; `search` / `read_email` / `read_thread` to pull context.
 
 ## The BEC hard-stop is SACRED — do not try to route around it
 
