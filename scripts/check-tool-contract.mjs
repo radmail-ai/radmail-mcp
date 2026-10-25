@@ -30,11 +30,20 @@ const CANONICAL = [
 // Canonical on the PACKAGE surface only. Connected mode (RADMAIL_API_KEY) rides the
 // local npm/stdio package; the zero-auth hosted sandbox stays key-less by design, so
 // these must be advertised (mcp.json + llms.txt) and registered by the package, but
-// are NOT required of the live hosted sandbox. `read_email` is the only connected-ONLY
-// tool (it has no sandbox mode) — the other connected tools live in CANONICAL above.
+// are NOT required of the live hosted sandbox. `read_email` and the 0.6.0 reads
+// (`read_thread`, `list_emails`, `list_prepared_drafts`, `list_watched_threads`) are
+// connected-ONLY (no sandbox mode) — the dual-mode connected tools live in CANONICAL above.
 // `check_send_domain` is zero-auth (read-only DNS, no key) but ships in the package
-// first; move it to CANONICAL once the hosted sandbox redeploys with it.
-const PACKAGE_CANONICAL = ["read_email", "check_send_domain"];
+// first; move it to CANONICAL once the hosted sandbox redeploys with it. The opt-in
+// send / inbox-action tools are deliberately NOT canonical: they are absent by default.
+const PACKAGE_CANONICAL = [
+  "read_email",
+  "read_thread",
+  "list_emails",
+  "list_prepared_drafts",
+  "list_watched_threads",
+  "check_send_domain",
+];
 
 const fail = [];
 // ── 🔑 "I COULD NOT LOOK" IS NOT "I LOOKED AND IT DIVERGED" ─────────────────

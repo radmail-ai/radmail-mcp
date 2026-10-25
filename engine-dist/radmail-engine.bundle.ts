@@ -2,7 +2,7 @@
 // Fix upstream in radmail-ai/radmail-mcp (src/engine/*), re-run
 // `node scripts/bundle-engine.mjs`, and re-install with
 // `node scripts/install-engine-into.mjs <repo> --apply`.
-// radmail-mcp 0.5.1 · modules: engine/types.ts, engine/send-disposition.ts
+// radmail-mcp 0.6.0 · modules: engine/types.ts, engine/send-disposition.ts
 // sha256(body): ea47d97174ae3b2f66f6217f38ee03b158184fa7f8fec2583a4821d702ce49f3
 // Pure: no network, no DB, no model. Safe to run inside a regulated org's
 // own process — no email content leaves the app that calls it.

@@ -47,7 +47,7 @@ export type ConnectedErrorKind = "auth" | "entitlement" | "timeout" | "network" 
 export class ConnectedApiError extends Error {
   readonly kind: ConnectedErrorKind;
   readonly status: number | null;
-  /** The server's own error code (e.g. `not_found`, `invalid_cursor`), when it sent one. */
+  // The server's own error code (e.g. not_found, invalid_cursor), when it sent one.
   readonly code: string | null;
   constructor(kind: ConnectedErrorKind, message: string, status: number | null = null, code: string | null = null) {
     super(message);

@@ -8,7 +8,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { buildBundle, ENGINE_ORDER, OUT_FILE, HASH_FILE } from "../scripts/bundle-engine.mjs";
 import {
@@ -63,11 +64,15 @@ test("the buildBundle refactor did not move a byte: default output == engine-dis
 
 // ── POSITIVE CONTROL: a good tag installs, byte for byte ───────────────────
 test("POSITIVE CONTROL: a clean engine tag installs, and re-running is a no-op", () => {
-  const src = fixtureRepo();
-  g(src, "tag", "radmail-engine-v0.5.1");
+  // Compared below against the bundle THIS repo tracks, so the fixture must carry
+  // this repo's real version — a hardcoded one expires at the next version bump
+  // and then fails a correct tree (it did, at 0.5.1 → 0.6.0).
+  const V = (JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8")) as { version: string }).version;
+  const src = fixtureRepo({ version: V });
+  g(src, "tag", `radmail-engine-v${V}`);
   const r = resolveSource(src);
   assert.equal(r.ok, true, (r as any).message);
-  assert.equal(r.source, "refs/tags/radmail-engine-v0.5.1");
+  assert.equal(r.source, `refs/tags/radmail-engine-v${V}`);
   assert.equal(r.unreleased, false);
   // Same sources + same version ⇒ the same bytes this repo tracks (and a consumer carries).
   assert.equal(r.bundle, readFileSync(OUT_FILE, "utf8"));

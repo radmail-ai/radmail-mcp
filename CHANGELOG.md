@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.6.0 (unreleased — not published to npm)
+
+- **Four connected read tools** (GET-only, under the existing read key): `read_thread`
+  (`GET /api/v1/threads/{id}` — the thread and its received emails oldest first, with
+  `rfcMessageId` / `inReplyTo`, metadata only, and the server's `coverage` block),
+  `list_emails` (`GET /api/v1/emails` with `since` + `cursor` → `nextCursor`, for polling),
+  `list_prepared_drafts` (`GET /api/v1/prepared-drafts?emailId=`) and `list_watched_threads`
+  (`GET /api/v1/watched-threads`). Every body-derived field is taint-wrapped
+  (`provenance:"untrusted-email-body"`), including draft bodies and sender-chosen attachment
+  filenames. `list_emails` **fails closed** on a RadMail deployment too old to honour
+  `since` / `cursor` (it would otherwise return the newest page of the whole mailbox as
+  "new"); without them it still lists.
+- **`search` pages:** a new `offset` input and a `nextOffset` output. The API's search has no
+  cursor, so none is offered there; `list_emails` is the cursor walk.
+- **Ids renamed honestly.** Connected results now carry `id` (RadMail's own id) and
+  `rfcMessageId` (the RFC 5322 Message-ID a reply threads on). `search`, `read_email` and
+  `list_right_now` keep `messageId` **for one release** as a deprecated alias of `id`, with a
+  `deprecated` note in the response — the published `read_email` description told agents to
+  read it, so removing it outright would have broken that contract. New tools never emit
+  `messageId`. `list_right_now` now also surfaces the RFC Message-ID the API always returned.
+  A stored Message-ID that is not a single well-formed token is withheld (`null`), not handed
+  over untainted.
+- **Commitments link to their source:** `list_commitments` returns `emailId` and `threadId`
+  (null on servers that predate them).
+- **A 404 says which of three things it is:** `not_found` (not visible to this key),
+  `not_enabled` (the feature is switched off on the workspace) or `not_available` (the
+  deployment predates the route). Other refusals now carry the server's own error `code` and
+  its short detail (e.g. `invalid_since`, `mailbox_scope_not_supported_on_this_route`).
+- **Opt-in inbox actions (local stdio only):** `archive_email`, `snooze_email`, `mark_read`,
+  `label_email`, `act_on_emails` (batch ≤ 50) over `POST /api/v1/emails/{id}/actions` and
+  `POST /api/v1/emails/actions`. Registered only when **both** `RADMAIL_TRIAGE_TOOLS=1` and a
+  separate triage-scoped `RADMAIL_TRIAGE_API_KEY` are set; never on a hosted endpoint. No
+  trash, delete or send verb exists in the vocabulary, the schema, the client code or any URL
+  it fetches (pinned). A 404 `inbox_actions_api_disabled` (or a deployment without the route)
+  reads as *"inbox actions are not enabled on this RadMail workspace yet"*, distinct from a
+  `not_found` about the email. Frozen in their own manifest (`src/triage-tool-manifest.ts`);
+  the safety block gains a `triageSurface` sentence and the instructions an addendum on such a
+  server only.
+- **MCP annotations, frozen.** Connected read tools carry `readOnlyHint: true`; the inbox
+  actions `readOnlyHint: false, destructiveHint: false, idempotentHint: true`; `send_email`,
+  `get_attachment` (it writes a local file) and the sandbox-only tools carry none. Annotations
+  are now part of each tool's manifest hash when present, so flipping one fails startup like a
+  description edit. **Manifest regenerated deliberately:** the sandbox-only tools' hashes and
+  the `send_email` manifest are byte-identical to 0.5.1; `search`, `read_email`,
+  `list_right_now`, `list_commitments`, `get_attachment`, the four new tools and the server
+  instructions moved.
+- **Hosted endpoint, per-request connected mode (preview):** `api/mcp.ts` accepts
+  `Authorization: Bearer tmk_…` and builds that request's server with that key only. The
+  deployment holds no key — a request without a bearer is sandbox-only even if
+  `RADMAIL_API_KEY` is set there; a malformed `tmk_…` bearer is refused (401) rather than
+  served the demo inbox; the key is never logged or echoed. Read tools only: no send and no
+  inbox-action tool is registered there, and `get_attachment` refuses.
+- **Docs:** the README's `send_email` instructions now say plainly that the published npm
+  package (0.5.0, 2026-08-11) does not contain `send_email`, that it ships in 0.6.0, and how to
+  run from source until then. Tool-count table re-read from the frozen manifests.
+
 ## 0.5.1 (unreleased)
 
 - **Docs:** answers the **BEC control checklist the email-security category publishes**, in that

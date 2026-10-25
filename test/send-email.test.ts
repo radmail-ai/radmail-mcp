@@ -243,9 +243,17 @@ describe("where the tool exists", () => {
   });
 
   test("the hosted HTTP entries never ask for it, whatever the environment", () => {
-    for (const f of ["api/mcp.ts", "src/http.ts"]) {
+    // 0.6.0: api/mcp.ts now passes the request's own bearer (`connected`) and
+    // `hosted: true` — and nothing else. Pinned exactly, so an added option
+    // (enableSend, enableTriage) fails here; test/hosted-bearer.test.ts proves
+    // the same thing behaviourally by listing the hosted tools.
+    const expected: Record<string, RegExp> = {
+      "api/mcp.ts": /createServer\(\{ connected, hosted: true \}\)/,
+      "src/http.ts": /createServer\(\)/,
+    };
+    for (const [f, call] of Object.entries(expected)) {
       const src = readFileSync(join(ROOT, f), "utf8");
-      assert.match(src, /createServer\(\)/, `${f} should call createServer() with no options`);
+      assert.match(src, call, `${f} should call createServer with only ${call.source}`);
       assert.doesNotMatch(src, /enableSend|sendToolRequested/, `${f} must not be able to turn on send`);
     }
   });
