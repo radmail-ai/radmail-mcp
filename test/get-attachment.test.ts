@@ -222,8 +222,8 @@ test("get_attachment: the UTF-8 filename* form is decoded and still tainted", as
 });
 
 test("get_attachment: a huge refusal body is not read past 64 KB; the refusal still comes back", async () => {
+  let sent = 0;
   __setFetchForTests(async () => {
-    let sent = 0;
     const chunk = new Uint8Array(1024 * 1024).fill(32);
     return new Response(
       new ReadableStream<Uint8Array>({
@@ -241,4 +241,5 @@ test("get_attachment: a huge refusal body is not read past 64 KB; the refusal st
   assert.equal(r.refused, true);
   assert.equal(r.status, 403);
   assert.equal(r.error, "http_403");
+  assert.ok(sent <= 2 * 1024 * 1024, `read ${sent} bytes of a refusal; the cap is 64 KB`);
 });
