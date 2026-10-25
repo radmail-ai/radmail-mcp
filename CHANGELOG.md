@@ -51,10 +51,13 @@
   the `send_email` manifest are byte-identical to 0.5.1; `search`, `read_email`,
   `list_right_now`, `list_commitments`, `get_attachment`, the four new tools and the server
   instructions moved.
-- **Hosted endpoint, per-request connected mode (preview):** `api/mcp.ts` accepts
+- **Hosted endpoint, per-request connected mode (preview, DARK):** off unless the deployment
+  sets `RADMAIL_HOSTED_BEARER=1` (exactly `1`; nothing here sets it). While off, a bearer is
+  ignored, nothing is refused with 401, and the endpoint is sandbox-only as before — merging
+  and deploying adds no capability. When on, `api/mcp.ts` accepts
   `Authorization: Bearer tmk_…` and builds that request's server with that key only. The
   deployment holds no key — a request without a bearer is sandbox-only even if
-  `RADMAIL_API_KEY` is set there; a malformed `tmk_…` bearer is refused (401) rather than
+  `RADMAIL_API_KEY` is set there; with the flag on, a malformed `tmk_…` bearer is refused (401) rather than
   served the demo inbox; the key is never logged or echoed. Read tools only: no send and no
   inbox-action tool is registered there, and `get_attachment` refuses.
 - **Docs:** the README's `send_email` instructions now say plainly that the published npm

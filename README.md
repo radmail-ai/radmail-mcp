@@ -332,9 +332,11 @@ Search it, read it, know what matters now, know what's owed — install it once 
 - **No fabricated judgments:** connected `list_right_now` surfaces the live engine's own band / importance / urgency / reasons as-is — it never invents local hard-stop determinations the API didn't return.
 - Without a key, `search` / `list_right_now` / `list_commitments` (sans `messages`) and the connected-only tools return friendly setup instructions instead of an error — the sandbox keeps working exactly as before.
 
-### Hosted endpoint: a key per request (preview)
+### Hosted endpoint: a key per request (preview, off by default — Doug turns it on)
 
-This package's own hosted deployment (`api/mcp.ts`) accepts a RadMail key **on each request** — so a remote MCP client can reach a real inbox without running a local process:
+> **Off by default.** The hosted deployment honours a bearer **only when its environment sets `RADMAIL_HOSTED_BEARER=1`** (exactly `1`). Nothing in this repository sets it, and Doug switches it on. While it is off, the hosted endpoint behaves as it did before this preview existed: a bearer is ignored, nothing is refused with 401, and every request is sandbox-only — so deploying this code adds no new capability until the flag is set. `GET /api/mcp` reports `connectedPreview.enabled`.
+
+When it is on, this package's own hosted deployment (`api/mcp.ts`) accepts a RadMail key **on each request** — so a remote MCP client can reach a real inbox without running a local process:
 
 ```text
 POST /api/mcp
@@ -344,7 +346,7 @@ Authorization: Bearer tmk_live_…        (or tmk_test_…)
 - **That request's** connected read tools use **that** key, and nothing else does. The deployment holds no key: a request without a bearer is sandbox-only exactly as before, even if `RADMAIL_API_KEY` happens to be set in the deployment's environment.
 - **Read tools only.** No `send_email` and no inbox action is registered on the hosted endpoint, with or without a key, whatever its environment says. `get_attachment` refuses there (it saves files on the machine running the server).
 - **The key is never logged, echoed, or put in a response** — not even its prefix, and it is not sent to telemetry.
-- A bearer that starts like a RadMail key but is malformed is refused with HTTP 401 (it names the expected shape, never the value), so a typo is never silently served the demo inbox. A bearer that is not a RadMail key at all is ignored, as before.
+- With the preview on, a bearer that starts like a RadMail key but is malformed is refused with HTTP 401 (it names the expected shape, never the value), so a typo is never silently served the demo inbox. A bearer that is not a RadMail key at all is ignored, as before.
 - **Preview:** there is no OAuth yet — the client must be able to send a custom header — and the endpoint keeps its per-IP rate limit (60 requests/min). `GET /api/mcp` reports `connectedPreview` alongside the manifest check.
 
 ### The live engine is owner-taught

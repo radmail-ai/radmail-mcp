@@ -398,8 +398,8 @@ function notConnectedResult(whatHappened: string) {
       connected:
         "Connect the user's REAL RadMail inbox with a RadMail API key (keys start with tmk_ — create one in " +
         `about a minute at ${API_KEYS_URL}). On a local server, set the RADMAIL_API_KEY environment variable ` +
-        "and restart; on the hosted endpoint, send the key on each request as an Authorization: Bearer header " +
-        "(preview, read tools only). Then `search` with just a query finds any email they've ever received, " +
+        "and restart; on a hosted endpoint whose operator has turned on the bearer preview (it is off by default), " +
+        "send the key on each request as an Authorization: Bearer header (read tools only). Then `search` with just a query finds any email they've ever received, " +
         "`read_email` fetches the full message, `read_thread` shows the conversation, `list_emails` walks new " +
         "mail by cursor, `list_right_now` returns their real can't-miss lane, `list_commitments` lists their " +
         "real open promises, `list_prepared_drafts` shows RadMail's own drafts and `list_watched_threads` the " +
@@ -409,7 +409,7 @@ function notConnectedResult(whatHappened: string) {
     },
     getAKey: API_KEYS_URL,
     connectExample: "claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp",
-    hostedExample: "send the header Authorization: Bearer tmk_... with each POST to this package's hosted /api/mcp endpoint (preview, read tools only)",
+    hostedExample: "only where the operator has turned the preview on (off by default): send the header Authorization: Bearer tmk_... with each POST to this package's hosted /api/mcp endpoint (read tools only)",
     note: "Nothing failed — this tool just needs one of the two inputs above to have something to search.",
   });
 }
@@ -1508,7 +1508,7 @@ export const TOOL_DEFS: ToolDef[] = [
   {
     name: "list_right_now",
     description:
-      "Return only the 'Right Now' lane — the short can't-miss list, each item with why-surfaced. TWO MODES: pass `messages` and RadMail ranks THOSE (free in-memory sandbox, with hard-stop flags) — or OMIT `messages` on a server holding a RadMail key (RADMAIL_API_KEY locally, or a Bearer header on the hosted endpoint) and RadMail returns the user's REAL Right Now lane via the v1 API (read-only; band + importance + urgency + reasons from the live engine, each item's `id` and `rfcMessageId`; get a key at https://app.radmail.ai/settings/api-keys)." +
+      "Return only the 'Right Now' lane — the short can't-miss list, each item with why-surfaced. TWO MODES: pass `messages` and RadMail ranks THOSE (free in-memory sandbox, with hard-stop flags) — or OMIT `messages` on a server holding a RadMail key (RADMAIL_API_KEY locally, or a Bearer header on a hosted endpoint whose operator turned that preview on) and RadMail returns the user's REAL Right Now lane via the v1 API (read-only; band + importance + urgency + reasons from the live engine, each item's `id` and `rfcMessageId`; get a key at https://app.radmail.ai/settings/api-keys)." +
       TOOL_DESCRIPTION_TAINT_SUFFIX,
     inputSchema: connectedBatchShape,
     annotations: READ_ONLY,
@@ -1533,7 +1533,7 @@ export const TOOL_DEFS: ToolDef[] = [
   {
     name: "list_commitments",
     description:
-      "List open promises — what's owed and to whom, with the due window. TWO MODES: pass `messages` and RadMail extracts promises from THOSE (free in-memory sandbox) — or OMIT `messages` on a server holding a RadMail key (RADMAIL_API_KEY locally, or a Bearer header on the hosted endpoint) and RadMail returns the user's REAL tracked commitments via the v1 API (read-only; direction / party / action / due / state / confidence from the live engine, plus the `emailId` and `threadId` each was found in; get a key at https://app.radmail.ai/settings/api-keys). On the day each is due, RadMail drafts the follow-through for review (never auto-sent)." +
+      "List open promises — what's owed and to whom, with the due window. TWO MODES: pass `messages` and RadMail extracts promises from THOSE (free in-memory sandbox) — or OMIT `messages` on a server holding a RadMail key (RADMAIL_API_KEY locally, or a Bearer header on a hosted endpoint whose operator turned that preview on) and RadMail returns the user's REAL tracked commitments via the v1 API (read-only; direction / party / action / due / state / confidence from the live engine, plus the `emailId` and `threadId` each was found in; get a key at https://app.radmail.ai/settings/api-keys). On the day each is due, RadMail drafts the follow-through for review (never auto-sent)." +
       TOOL_DESCRIPTION_TAINT_SUFFIX,
     inputSchema: connectedBatchShape,
     annotations: READ_ONLY,
@@ -1542,7 +1542,7 @@ export const TOOL_DEFS: ToolDef[] = [
   {
     name: "search",
     description:
-      "Find a specific message by sender / subject / content — most-relevant + newest first; each hit says where it matched. TWO MODES: pass `messages` and RadMail ranks THOSE (free in-memory sandbox, zero setup) — or OMIT `messages` on a server holding a RadMail key (RADMAIL_API_KEY locally, or a Bearer header on the hosted endpoint) and RadMail searches the user's REAL inbox via the v1 API (read-only; page with `offset` / `nextOffset`; each hit's `id` goes to `read_email`; get a key at https://app.radmail.ai/settings/api-keys)." +
+      "Find a specific message by sender / subject / content — most-relevant + newest first; each hit says where it matched. TWO MODES: pass `messages` and RadMail ranks THOSE (free in-memory sandbox, zero setup) — or OMIT `messages` on a server holding a RadMail key (RADMAIL_API_KEY locally, or a Bearer header on a hosted endpoint whose operator turned that preview on) and RadMail searches the user's REAL inbox via the v1 API (read-only; page with `offset` / `nextOffset`; each hit's `id` goes to `read_email`; get a key at https://app.radmail.ai/settings/api-keys)." +
       TOOL_DESCRIPTION_TAINT_SUFFIX,
     inputSchema: {
       query: z.string().min(1).max(200).describe("What to find — sender, subject, or content terms (all must match)."),

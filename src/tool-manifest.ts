@@ -17,7 +17,7 @@ export const TOOL_MANIFEST: FrozenManifest = {
   "version": 1,
   "algorithm": "sha256/canonical-json/zod-to-json-schema",
   "converterVersion": "3.25.2",
-  "serverInstructionsSha256": "1c5555f634332c1102292cf1675d8e0af759176b72887fb3d326d7ee0889fed2",
+  "serverInstructionsSha256": "353cdaee49dae54f3c7dfdc84327e88386df7ba0bd540fedd57285463d065da7",
   "tools": [
     {
       "name": "check_send_domain",
@@ -33,7 +33,7 @@ export const TOOL_MANIFEST: FrozenManifest = {
     },
     {
       "name": "list_commitments",
-      "sha256": "6c0505e4a45cc238de67d09e5c9306ea7dd4cc794de2a763ff02ce1662a3d9d0"
+      "sha256": "2745cb8f5b40027d319a3b87b20d95dda898505c4f05c398c71d7b524f8fb9e4"
     },
     {
       "name": "list_emails",
@@ -45,7 +45,7 @@ export const TOOL_MANIFEST: FrozenManifest = {
     },
     {
       "name": "list_right_now",
-      "sha256": "bce9933aa2463d46a2fd7903961c3edb061f6b92be235a8536166d53ce6eae16"
+      "sha256": "136263d4c26e800e75408a76b95fb9848ec3b30ac1e9c0bce020310f914342c2"
     },
     {
       "name": "list_watched_threads",
@@ -77,7 +77,7 @@ export const TOOL_MANIFEST: FrozenManifest = {
     },
     {
       "name": "search",
-      "sha256": "ff6ff6636d822668fd6c132455bb9d7d471d2909641e6295edf319fdb6e17eaa"
+      "sha256": "7d686bf5febade59c5101489da48a6c52d9eafd03c06c0e2f9d00f1d6845bc74"
     },
     {
       "name": "triage",
@@ -92,5 +92,5 @@ export const TOOL_MANIFEST: FrozenManifest = {
       "sha256": "ab7388194979a2ff3f309b825e4e686e6be30efdfb118b7b297a65a7ca7eba2f"
     }
   ],
-  "manifestSha256": "7dbfdc10a249e2872f682c8c50c3dae014f789640a99aeb1481ad22c5b9fa27e"
+  "manifestSha256": "3bfbb49daf9d6cf00f9b65b8de5aa861311774c905c6b31df57f711946d92465"
 };

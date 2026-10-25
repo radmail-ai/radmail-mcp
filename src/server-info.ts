@@ -14,8 +14,9 @@ export const SERVER_INSTRUCTIONS =
   "RadMail is an email operating system for agents: two-axis triage (importance × urgency), a 'Right Now' " +
   "lane, explainable why-surfaced, commitment follow-through, and reviewable drafts. Start anywhere — call " +
   "`triage` (or `triage_inbox` for a batch) and OMIT the token; a free sandbox tenant auto-provisions. " +
-  "CONNECTED MODE: when this server holds a RadMail API key (RADMAIL_API_KEY on a local server, or an " +
-  "Authorization: Bearer tmk_… header on each request to the hosted endpoint), `search` / `list_right_now` / " +
+  "CONNECTED MODE: when this server holds a RadMail API key (RADMAIL_API_KEY on a local server, or — only where " +
+  "its operator has turned the preview on — an Authorization: Bearer tmk_… header on each request to the hosted " +
+  "endpoint), `search` / `list_right_now` / " +
   "`list_commitments` (each with `messages` omitted), `read_email`, `read_thread`, `list_emails`, " +
   "`list_prepared_drafts` and `list_watched_threads` operate READ-ONLY on the user's REAL RadMail inbox via the " +
   "v1 API — get a key at https://app.radmail.ai/settings/api-keys. An email's `id` is RadMail's own id (pass it " +

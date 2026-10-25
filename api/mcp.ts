@@ -10,8 +10,15 @@
 // ignores a returned web `Response` (the function then 504s); named method
 // exports select the web signature unambiguously.
 //
-// ── CONNECTED MODE, PER REQUEST (preview, 0.6.0) ────────────────────────────
-// A request carrying `Authorization: Bearer tmk_…` gets a server whose
+// ── CONNECTED MODE, PER REQUEST (preview, 0.6.0) — DARK BY DEFAULT ─────────
+// 🛑 OFF unless RADMAIL_HOSTED_BEARER is exactly "1". Merging this file
+// Vercel-deploys it, and the published agent-safety contract says the hosted
+// endpoint is sandbox-only, so the capability ships switched off: with the
+// flag unset (or anything but "1") a bearer is IGNORED exactly as before this
+// change — no connected mode, no 401 — and the endpoint is sandbox-only.
+// Doug turns it on. Nothing in this repo sets the variable.
+//
+// With the flag on, a request carrying `Authorization: Bearer tmk_…` gets a server whose
 // connected read tools use THAT key, for THAT request only. There is no
 // process-wide key on this endpoint: a request without a bearer is sandbox-only
 // exactly as before, even if RADMAIL_API_KEY happens to be set on the
@@ -29,6 +36,12 @@ import { TOOL_MANIFEST } from "../src/tool-manifest.js";
 import { verifyToolManifest, type ManifestVerification } from "../src/lib/manifest.js";
 import { checkRateLimit, clientIp } from "../src/lib/rate-limit.js";
 
+/** The switch. Exactly "1" turns the hosted bearer on; anything else (unset, "true", "0", "") is off. */
+export const HOSTED_BEARER_FLAG = "RADMAIL_HOSTED_BEARER";
+export function hostedBearerEnabled(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  return env[HOSTED_BEARER_FLAG] === "1";
+}
+
 /** The documented RadMail key shape: tmk_live_ or tmk_test_ + 40 hex characters. */
 const RADMAIL_KEY_RE = /^tmk_(?:live|test)_[0-9a-f]{40}$/;
 
@@ -39,6 +52,7 @@ export type BearerResolution =
 
 /**
  * Decide what this ONE request's Authorization header means. Exported for tests.
+ *   · the hosted-bearer flag is off → sandbox, whatever the header says (as before)
  *   · no header, or a bearer that is not a RadMail key (`tmk_…`) → sandbox, as before
  *   · a well-formed RadMail key → connected read tools with that key, this request only
  *   · something that starts like a RadMail key but is malformed → refused (401), so a
@@ -49,6 +63,9 @@ export function resolveBearer(
   req: Request,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): BearerResolution {
+  // DARK: with the flag off the header is not even read, so the request is
+  // handled exactly as it was before the hosted bearer existed.
+  if (!hostedBearerEnabled(env)) return { kind: "none" };
   const header = req.headers.get("authorization");
   if (!header) return { kind: "none" };
   const m = /^Bearer\s+(\S+)\s*$/i.exec(header.trim());
@@ -125,8 +142,10 @@ export function healthResponse(
       toolManifest: "verified",
       note: "POST JSON-RPC MCP requests here. Zero-auth sandbox; tools auto-provision a tenant.",
       connectedPreview: {
-        status: "preview",
-        how: "send Authorization: Bearer tmk_… (a RadMail API key) on each POST; that request's connected read tools use that key",
+        status: hostedBearerEnabled() ? "preview" : "off",
+        enabled: hostedBearerEnabled(),
+        flag: `${HOSTED_BEARER_FLAG}=1 turns it on; while off, a bearer is ignored and this endpoint is sandbox-only`,
+        how: "when on: send Authorization: Bearer tmk_… (a RadMail API key) on each POST; that request's connected read tools use that key",
         tools: "read tools only (search, read_email, read_thread, list_emails, list_right_now, list_commitments, list_prepared_drafts, list_watched_threads)",
         never: "no send and no inbox-action tool is registered on this endpoint, with or without a key; no key is stored, logged or echoed",
       },

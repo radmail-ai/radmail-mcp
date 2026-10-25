@@ -12,13 +12,21 @@
 //       silently served the demo inbox; a non-RadMail bearer stays sandbox;
 //   (e) the hosted surface stays non-destructive: no send, no inbox-action tool,
 //       whatever the environment says; get_attachment refuses there;
-//   (f) health advertises the preview honestly.
+//   (f) health advertises the preview honestly;
+//   (g) DARK BY DEFAULT: unless RADMAIL_HOSTED_BEARER is exactly "1" a valid
+//       bearer is IGNORED and the endpoint is sandbox-only, exactly as before —
+//       with the positive control that the same request with the flag on IS
+//       connected. Every other block here runs with the flag ON.
 
 import { test, beforeEach, afterEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
+import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { POST, GET, resolveBearer } from "../api/mcp.js";
 import { __setFetchForTests, DEFAULT_API_URL } from "../src/lib/connected.js";
 import { __setActionsFetchForTests } from "../src/lib/inbox-actions.js";
@@ -26,6 +34,7 @@ import { __setSendFetchForTests } from "../src/lib/send.js";
 import { createServer } from "../src/server.js";
 import { setSendSurfaceActive, setTriageSurfaceActive } from "../src/lib/taint.js";
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const KEY_A = "tmk_test_1111111111111111111111111111111111111111";
 const KEY_B = "tmk_live_2222222222222222222222222222222222222222";
 const ENV_KEY = "tmk_live_3333333333333333333333333333333333333333";
@@ -72,7 +81,7 @@ const originals = {
   err: process.stderr.write.bind(process.stderr),
 };
 
-const ENV = ["RADMAIL_API_KEY", "RADMAIL_API_URL", "RADMAIL_SEND_TOOL", "RADMAIL_SEND_API_KEY", "RADMAIL_TRIAGE_TOOLS", "RADMAIL_TRIAGE_API_KEY", "RADMAIL_ATTACHMENT_DIR"];
+const ENV = ["RADMAIL_HOSTED_BEARER", "RADMAIL_API_KEY", "RADMAIL_API_URL", "RADMAIL_SEND_TOOL", "RADMAIL_SEND_API_KEY", "RADMAIL_TRIAGE_TOOLS", "RADMAIL_TRIAGE_API_KEY", "RADMAIL_ATTACHMENT_DIR"];
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
@@ -83,6 +92,8 @@ beforeEach(() => {
     saved[k] = process.env[k];
     delete process.env[k];
   }
+  // The bearer path is dark by default; every block below except (g) tests it switched ON.
+  process.env.RADMAIL_HOSTED_BEARER = "1";
   __setFetchForTests(async (url, init) => {
     const auth = new Headers(init.headers).get("authorization");
     fetched.push({ url: String(url), auth });
@@ -152,8 +163,8 @@ describe("resolveBearer", () => {
     assert.deepEqual(resolveBearer(req("Basic abc")), { kind: "none" });
   });
   test("a well-formed RadMail key → connected, default host; RADMAIL_API_URL overrides the HOST only", () => {
-    assert.deepEqual(resolveBearer(req(`Bearer ${KEY_A}`), {}), { kind: "connected", cfg: { apiKey: KEY_A, apiUrl: DEFAULT_API_URL } });
-    assert.deepEqual(resolveBearer(req(`bearer ${KEY_B}`), { RADMAIL_API_URL: "https://staging.radmail.ai/" }), {
+    assert.deepEqual(resolveBearer(req(`Bearer ${KEY_A}`), { RADMAIL_HOSTED_BEARER: "1" }), { kind: "connected", cfg: { apiKey: KEY_A, apiUrl: DEFAULT_API_URL } });
+    assert.deepEqual(resolveBearer(req(`bearer ${KEY_B}`), { RADMAIL_HOSTED_BEARER: "1", RADMAIL_API_URL: "https://staging.radmail.ai/" }), {
       kind: "connected",
       cfg: { apiKey: KEY_B, apiUrl: "https://staging.radmail.ai" },
     });
@@ -297,7 +308,75 @@ test("health advertises the bearer preview and its limits", async () => {
   const res = await GET();
   const body = (await res.json()) as Record<string, any>;
   assert.equal(body.toolManifest, "verified");
-  assert.equal(body.connectedPreview.status, "preview");
+  assert.equal(body.connectedPreview.status, "preview", "flag on in this block");
+  assert.equal(body.connectedPreview.enabled, true);
   assert.match(body.connectedPreview.how, /Authorization: Bearer/);
   assert.match(body.connectedPreview.never, /no send and no inbox-action tool/);
+});
+
+// ─── (g) dark by default ─────────────────────────────────────────────────────
+
+describe("🛑 dark by default — RADMAIL_HOSTED_BEARER must be exactly \"1\"", () => {
+  const OFF_VALUES: Array<string | undefined> = [undefined, "", "0", "true", "TRUE", "yes", " 1", "1 ", "01"];
+
+  for (const v of OFF_VALUES) {
+    test(`flag ${v === undefined ? "unset" : JSON.stringify(v)} → a VALID tmk_ bearer is ignored: sandbox, no request to RadMail`, async () => {
+      if (v === undefined) delete process.env.RADMAIL_HOSTED_BEARER;
+      else process.env.RADMAIL_HOSTED_BEARER = v;
+      const { status, text, result } = await call("search", { query: "x" }, bearer(KEY_A));
+      assert.equal(status, 200);
+      assert.equal(result!.connected, false, "the setup pointer — not a connected result");
+      assert.equal(fetched.length, 0, "the bearer was not used");
+      assertKeyNowhere(KEY_A, text);
+    });
+  }
+
+  test("🎯 CONTROL: the SAME request with the flag exactly \"1\" IS connected", async () => {
+    process.env.RADMAIL_HOSTED_BEARER = "1";
+    const { result } = await call("search", { query: "x" }, bearer(KEY_A));
+    assert.equal(result!.engineMode, "connected");
+    assert.equal(fetched[0].auth, `Bearer ${KEY_A}`);
+  });
+
+  test("flag off → a MALFORMED tmk_ bearer is ignored too (no 401 — the request is handled as before)", async () => {
+    delete process.env.RADMAIL_HOSTED_BEARER;
+    const res = await POST(rpc("tools/call", { name: "search", arguments: { query: "x" } }, bearer("tmk_live_thisisnotarealkey")));
+    assert.equal(res.status, 200);
+    assert.equal(fetched.length, 0);
+    // 🎯 CONTROL: with the flag on, the same header is a 401.
+    process.env.RADMAIL_HOSTED_BEARER = "1";
+    const on = await POST(rpc("tools/call", { name: "search", arguments: { query: "x" } }, bearer("tmk_live_thisisnotarealkey")));
+    assert.equal(on.status, 401);
+  });
+
+  test("flag off → resolveBearer does not even read the header", () => {
+    const r = new Request("http://localhost/api/mcp", { method: "POST", headers: { authorization: `Bearer ${KEY_A}` } });
+    for (const env of [{}, { RADMAIL_HOSTED_BEARER: "true" }, { RADMAIL_HOSTED_BEARER: "0" }, { RADMAIL_HOSTED_BEARER: "" }]) {
+      assert.deepEqual(resolveBearer(r, env), { kind: "none" }, JSON.stringify(env));
+    }
+    assert.equal(resolveBearer(r, { RADMAIL_HOSTED_BEARER: "1" }).kind, "connected", "control");
+  });
+
+  test("flag off → health says the preview is off", async () => {
+    delete process.env.RADMAIL_HOSTED_BEARER;
+    const body = (await (await GET()).json()) as Record<string, any>;
+    assert.equal(body.connectedPreview.status, "off");
+    assert.equal(body.connectedPreview.enabled, false);
+    assert.match(body.connectedPreview.flag, /RADMAIL_HOSTED_BEARER=1/);
+  });
+
+  test("nothing in this repo turns the flag on (no tracked file sets it)", () => {
+    const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
+    const setters: string[] = [];
+    for (const f of tracked) {
+      // Files that can CONFIGURE a deployment or run code — not prose that documents the flag.
+      const configLike = /^(src|api|scripts|\.github)\//.test(f) || /^(vercel\.json|package\.json|smithery\.yaml|Dockerfile|server\.json|glama\.json|engine\.json|\.env.*)$/.test(f);
+      if (!configLike) continue;
+      const txt = readFileSync(join(ROOT, f), "utf8");
+      if (/RADMAIL_HOSTED_BEARER\s*[:=]\s*["']?1\b/.test(txt)) setters.push(f);
+    }
+    assert.deepEqual(setters, [], `files that set RADMAIL_HOSTED_BEARER=1: ${setters.join(", ")}`);
+    // 🎯 CONTROL: the pattern sees a planted setter.
+    assert.match('env: { RADMAIL_HOSTED_BEARER: "1" }', /RADMAIL_HOSTED_BEARER\s*[:=]\s*["']?1\b/);
+  });
 });
