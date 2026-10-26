@@ -41,6 +41,7 @@ claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
 | `list_prepared_drafts` | RadMail's own prepared reply drafts — never auto-sent (connected-inbox mode only). |
 | `list_watched_threads` | Watched threads and who spoke last (connected-inbox mode only). |
 | `get_attachment` | Save one attachment from a real email to a local folder (connected-inbox mode only). |
+| `check_before_send` | Ask RadMail whether a message you will send through your own provider should go — `pass` / `review` / `human_only` — without sending it (connected-inbox mode only). `human_only`: a person sends it or discards it. No verdict = unchecked, never pass. |
 | `triage` | Score a single message you pass in (importance × urgency). |
 | `provision_sandbox` | Mint a free sandbox tenant (auto-called on first sandbox use). |
 | `report_need` / `request_capability` | Send RadMail a missing-capability / feedback signal. |
