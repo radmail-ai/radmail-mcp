@@ -419,9 +419,10 @@ describe("fields are copied by name — nothing passes through", () => {
     assert.equal(r.reasons[1].evidence, undefined);
     assert.equal(r.reasons[2].evidence, undefined);
     assert.equal(r.evidenceWithheld, 3);
-    // 🎯 CONTROL: the agent's own text (truncated with "…", or in another case) is kept.
+    // 🎯 CONTROL: the agent's own text (truncated with "…", or in another case) is kept —
+    // and what comes back is the AGENT'S OWN span, never the server's copy of it.
     assert.equal(r.reasons[3].evidence.excerpt.value, "Hi Kat — confirming…");
-    assert.equal(r.reasons[4].evidence.excerpt.value, "THURSDAY");
+    assert.equal(r.reasons[4].evidence.excerpt.value, "Thursday", "the agent's own bytes, not the server's 'THURSDAY'");
     assert.doesNotMatch(JSON.stringify(r), /someone-else@other\.example/);
   });
 

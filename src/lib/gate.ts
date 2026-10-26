@@ -266,9 +266,15 @@ function evidenceFrom(v: unknown, input: GateInput): GateReason["evidence"] | nu
   if (!field || !excerpt || !isOffset(e.start) || !isOffset(e.end) || e.end < e.start) return null;
   const source = submittedTextFor(field, input);
   if (source === null) return null;
-  const core = excerpt.endsWith("…") ? excerpt.slice(0, -1) : excerpt;
-  if (!core || core.length > 200 || !source.toLowerCase().includes(core.toLowerCase())) return null;
-  return { field, start: e.start, end: e.end, excerpt: taint(excerpt) };
+  const truncated = excerpt.endsWith("…");
+  const core = truncated ? excerpt.slice(0, -1) : excerpt;
+  if (!core || core.length > 200) return null;
+  const at = source.toLowerCase().indexOf(core.toLowerCase());
+  if (at < 0) return null;
+  // Return the agent's OWN bytes, not the server's string: a case-insensitive match
+  // proves the span is the agent's text, so hand back exactly that span.
+  const own = source.slice(at, at + core.length) + (truncated ? "…" : "");
+  return { field, start: e.start, end: e.end, excerpt: taint(own) };
 }
 
 /** Every address the agent submitted, lower-cased, for the first-contact check. */

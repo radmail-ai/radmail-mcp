@@ -1471,8 +1471,8 @@ function gateNote(o: GateOutcome): string {
   }
   if (o.verdict === "review") {
     return (
-      "REVIEW: show the owner this exact message and the reasons before it goes, and send it only after they have " +
-      "read it. Nothing was sent." +
+      "REVIEW: show the owner this exact message and the reasons before it goes, and send it only if they say it " +
+      "should go. Reading it is not a yes. Nothing was sent." +
       identity
     );
   }
