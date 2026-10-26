@@ -20,6 +20,10 @@ export const TOOL_MANIFEST: FrozenManifest = {
   "serverInstructionsSha256": "353cdaee49dae54f3c7dfdc84327e88386df7ba0bd540fedd57285463d065da7",
   "tools": [
     {
+      "name": "check_before_send",
+      "sha256": "a86f5bca61bf90c64a7248cf05974935c3db30302def64049e83a0070acb7282"
+    },
+    {
       "name": "check_send_domain",
       "sha256": "f7a5724c049431eb017ad12900a8402bfbfeb40bbe498c8a8510ad886725ab77"
     },
@@ -92,5 +96,5 @@ export const TOOL_MANIFEST: FrozenManifest = {
       "sha256": "ab7388194979a2ff3f309b825e4e686e6be30efdfb118b7b297a65a7ca7eba2f"
     }
   ],
-  "manifestSha256": "3bfbb49daf9d6cf00f9b65b8de5aa861311774c905c6b31df57f711946d92465"
+  "manifestSha256": "23dde4e6a556177ba9e711b6b42fe6b769ae8612668db13fa56c6b20ae7b886f"
 };

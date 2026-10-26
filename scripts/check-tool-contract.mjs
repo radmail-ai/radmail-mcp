@@ -33,6 +33,7 @@ const CANONICAL = [
 // are NOT required of the live hosted sandbox. `read_email` and the 0.6.0 reads
 // (`read_thread`, `list_emails`, `list_prepared_drafts`, `list_watched_threads`) are
 // connected-ONLY (no sandbox mode) — the dual-mode connected tools live in CANONICAL above.
+// `check_before_send` (asks RadMail's POST /v1/gate, sends nothing) is connected-only too.
 // `check_send_domain` is zero-auth (read-only DNS, no key) but ships in the package
 // first; move it to CANONICAL once the hosted sandbox redeploys with it. The opt-in
 // send / inbox-action tools are deliberately NOT canonical: they are absent by default.
@@ -43,6 +44,7 @@ const PACKAGE_CANONICAL = [
   "list_prepared_drafts",
   "list_watched_threads",
   "check_send_domain",
+  "check_before_send",
 ];
 
 const fail = [];

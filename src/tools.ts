@@ -87,6 +87,7 @@ import {
   type ActionItem,
   type SingleOutcome,
 } from "./lib/inbox-actions.js";
+import { checkBeforeSend, type GateAttachmentMeta, type GateOutcome } from "./lib/gate.js";
 
 const ENGINE_MODE = "sandbox" as const;
 
@@ -1441,6 +1442,110 @@ export async function checkSendDomainTool(args: {
   });
 }
 
+// ─── 11. check_before_send (connected: ask RadMail's gate, send nothing) ────
+// For an agent that sends through its OWN provider: RadMail's POST /v1/gate
+// runs the checks /v1/send runs before anything leaves and answers pass |
+// review | human_only. Nothing is sent or stored. The client (src/lib/gate.ts)
+// copies the answer by NAME and turns every non-answer into UNCHECKED, never
+// pass. Connected-only, like read_thread: no key → setup instructions.
+
+/** What the agent is told to do with each answer. Never "release": nothing here is held anywhere. */
+function gateNote(o: GateOutcome): string {
+  if (!o.checked) {
+    return (
+      "UNCHECKED: RadMail gave no verdict, so treat this message as unchecked — not as pass. Nothing was sent. " +
+      "Do not send it on the strength of this answer; error.message says why and what would fix it."
+    );
+  }
+  const identity =
+    o.checks.identity === "unreadable"
+      ? " RadMail's recipient/From identity checks could not read what they needed, so finding nothing there says nothing about whether the recipients are right."
+      : "";
+  if (o.verdict === "human_only") {
+    return (
+      "HUMAN ONLY: a person must send this from their own mail, or discard it. Do not send it yourself through any " +
+      "provider, do not reword or split it to get a different answer, and do not ask again hoping for one. Tell the " +
+      "owner it needs them, and show them the reasons. Nothing was sent." +
+      identity
+    );
+  }
+  if (o.verdict === "review") {
+    return (
+      "REVIEW: show the owner this exact message and the reasons before it goes, and send it only if they say it " +
+      "should go. Reading it is not a yes. Nothing was sent." +
+      identity
+    );
+  }
+  return (
+    "PASS: no known risk pattern matched. That is not a clearance and not a promise the message is safe — RadMail is " +
+    "one layer and can miss things, and pass does not mean RadMail would send it without a person. Nothing was sent." +
+    identity
+  );
+}
+
+/** No key: setup instructions, stated as UNCHECKED so it can never be read as a pass. */
+function gateNotConnectedResult() {
+  return withSafety({
+    connected: false,
+    checked: false,
+    sent: false,
+    verdict: null,
+    whatHappened:
+      "`check_before_send` asks RadMail's send gate about a message, which requires connected mode — and this server " +
+      "holds no RadMail key. Nothing was checked and nothing was sent.",
+    connect:
+      "Connect a RadMail API key (keys start with tmk_ — create one in about a minute at " +
+      `${API_KEYS_URL}). Use a key that is NOT limited to one mailbox: the check reads the whole workspace, so ` +
+      "RadMail refuses a mailbox-confined key. On a local server, set the RADMAIL_API_KEY environment variable and " +
+      "restart; on a hosted endpoint whose operator has turned on the bearer preview (it is off by default), send the " +
+      "key on each request as an Authorization: Bearer header.",
+    getAKey: API_KEYS_URL,
+    connectExample: "claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp",
+    note: "UNCHECKED — not a pass. Without a key there is no verdict; do not treat this message as checked.",
+  });
+}
+
+export async function checkBeforeSendTool(
+  args: {
+    to: string[];
+    cc?: string[];
+    bcc?: string[];
+    subject: string;
+    body: string;
+    inReplyTo?: string;
+    from?: string;
+    attachments?: GateAttachmentMeta[];
+    agentId?: string;
+    focus?: string;
+  },
+  ctx?: ToolContext,
+): Promise<object> {
+  recordCall(args.agentId, "check_before_send", args.focus);
+  const cfg = connectedFor(ctx);
+  if (!cfg) return gateNotConnectedResult();
+  const outcome = await checkBeforeSend(
+    {
+      to: args.to,
+      cc: args.cc,
+      bcc: args.bcc,
+      subject: args.subject,
+      body: args.body,
+      inReplyTo: args.inReplyTo,
+      from: args.from,
+      attachments: args.attachments,
+    },
+    cfg,
+  );
+  return withSafety({
+    ...outcome,
+    ...(outcome.checked ? { provenance: provenanceBlock(["reasons[].evidence.excerpt"]) } : {}),
+    note: gateNote(outcome),
+    engineMode: CONNECTED_MODE,
+    source: `RadMail's send gate via the v1 API (${cfg.apiUrl})`,
+    readOnly: true,
+  });
+}
+
 // ─── Tool registry (name + description + zod input shape + handler) ─────────
 import { TOOL_DESCRIPTION_TAINT_SUFFIX } from "./lib/taint.js";
 
@@ -1471,6 +1576,19 @@ const READ_ONLY: ToolAnnotations = Object.freeze({ readOnlyHint: true });
 const INBOX_STATE_WRITE: ToolAnnotations = Object.freeze({
   readOnlyHint: false,
   destructiveHint: true,
+  idempotentHint: true,
+});
+
+/**
+ * check_before_send. It POSTs, but to a route that sends nothing and stores
+ * nothing (RadMail's own docs: the only writes are the key's last-used stamp
+ * and rate-limit bucket, as on every v1 route) — so it is read-only in the
+ * spec's sense, destructiveHint is false, and asking twice about the same
+ * message gets the same answer, so idempotentHint is true.
+ */
+const GATE_CHECK: ToolAnnotations = Object.freeze({
+  readOnlyHint: true,
+  destructiveHint: false,
   idempotentHint: true,
 });
 
@@ -1694,6 +1812,46 @@ export const TOOL_DEFS: ToolDef[] = [
       focus: z.string().max(60).optional(),
     },
     handler: checkSendDomainTool,
+  },
+  {
+    name: "check_before_send",
+    description:
+      "CONNECTED MODE: ask RadMail whether an email should be sent, WITHOUT sending it — for an agent that sends through its own provider. " +
+      "Returns verdict pass | review | human_only with reasons. Nothing is sent or stored. human_only means a person must send it from " +
+      "their own mail, or discard it; never send it yourself, and never retry to get a different answer. review means show it to the " +
+      "owner first. pass means no known risk pattern matched — not a clearance. Any answer without a verdict (the check switched off, " +
+      "a refused key, a timeout) comes back as checked: false and verdict: null — UNCHECKED, never a pass. Attachments are described " +
+      "by name, size and type only; their contents are never sent or scanned. Requires a RadMail key on this server that is not " +
+      "limited to one mailbox; without one it returns setup instructions." +
+      TOOL_DESCRIPTION_TAINT_SUFFIX,
+    inputSchema: {
+      to: z.array(z.string().email().max(254)).min(1).max(20).describe("Recipients, exactly as the message will be addressed."),
+      cc: z.array(z.string().email().max(254)).max(20).optional(),
+      bcc: z.array(z.string().email().max(254)).max(20).optional().describe("Checked like every other recipient."),
+      subject: z.string().max(500).describe("The subject exactly as it will be sent (an empty subject is itself a review finding)."),
+      body: z.string().max(100_000).describe("The body exactly as it will be sent — Markdown or plain text."),
+      inReplyTo: z
+        .string()
+        .max(500)
+        .optional()
+        .describe("Message-ID of the email being answered (a connected result's rfcMessageId value). Without it, a Re: subject is a review finding."),
+      from: z.string().email().max(254).optional().describe("Optional: the address it will go out from. Informational; it need not be connected to RadMail."),
+      attachments: z
+        .array(
+          z.object({
+            filename: z.string().min(1).max(255),
+            sizeBytes: z.number().int().min(0).optional(),
+            contentType: z.string().max(255).optional(),
+          }),
+        )
+        .max(10)
+        .optional()
+        .describe("Attachment metadata only — never the contents. Any attachment makes the verdict at least review, because RadMail cannot see inside it."),
+      agentId: agentIdField,
+      focus: focusField,
+    },
+    annotations: GATE_CHECK,
+    handler: checkBeforeSendTool,
   },
   {
     name: "provision_sandbox",

@@ -2,6 +2,30 @@
 
 ## 0.6.0 (unreleased — not published to npm)
 
+- **`check_before_send` (connected mode, default surface):** asks RadMail's `POST /api/v1/gate`
+  whether an email the agent will send **through its own provider** should go, WITHOUT sending
+  it — verdict `pass` / `review` / `human_only` with reasons. Nothing is sent or stored. The
+  note for `human_only` says a person sends it from their own mail or discards it, and never to
+  re-ask; `review` says show the owner first; `pass` says it is not a clearance. **Every
+  non-answer is unchecked, never pass**: RadMail's `404 gate_api_disabled` (the route is OFF on
+  RadMail today) reads *"not enabled on this RadMail workspace yet — treat as unchecked, not as
+  pass"*, a mailbox-confined key (`403 mailbox_scope_not_supported_on_this_route`) reads *"use a
+  key that is not limited to one mailbox"*, and 401 / 400 (with RadMail's own reason) / 429 /
+  5xx / a timeout / a 200 without a recognisable verdict all come back `checked: false`,
+  `verdict: null`. Fields are copied **by name** (`verdict`, `tier`, `reasons[code, message,
+  evidence]`, `firstContact`, `checks.identity`, RadMail's note as `radmailNote`; `sent` always
+  `false`); an evidence excerpt reaches the agent only when it is a piece of the agent's own
+  submitted text (taint-wrapped), and a first-contact address only when it is one of the agent's
+  recipients — anything else is withheld and counted. The mapping only tightens (a `hard_stop`
+  tier or a first-contact recipient is at least `human_only`, a `sensitive` tier or any reason at
+  least `review`). Attachments are metadata only; `review: "llm"` is never sent. Its own client
+  (`src/lib/gate.ts`) makes exactly one POST, to the gate path; the connected read client stays
+  GET-only. Annotated `readOnlyHint: true, destructiveHint: false, idempotentHint: true`. Without
+  a key it returns setup instructions and makes no request; on the hosted endpoint it behaves like
+  the read tools (setup instructions without a bearer; the request's own bearer with the preview
+  on). **Manifest regenerated deliberately:** one tool hash added; the 18 existing tool hashes,
+  the server-instructions hash and both opt-in manifests are byte-identical. Default surface
+  18 → 19 tools, still 0 send-capable.
 - **Four connected read tools** (GET-only, under the existing read key): `read_thread`
   (`GET /api/v1/threads/{id}` — the thread and its received emails oldest first, with
   `rfcMessageId` / `inReplyTo`, metadata only, and the server's `coverage` block),

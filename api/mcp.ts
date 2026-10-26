@@ -146,7 +146,7 @@ export function healthResponse(
         enabled: hostedBearerEnabled(),
         flag: `${HOSTED_BEARER_FLAG}=1 turns it on; while off, a bearer is ignored and this endpoint is sandbox-only`,
         how: "when on: send Authorization: Bearer tmk_… (a RadMail API key) on each POST; that request's connected read tools use that key",
-        tools: "read tools only (search, read_email, read_thread, list_emails, list_right_now, list_commitments, list_prepared_drafts, list_watched_threads)",
+        tools: "read tools only (search, read_email, read_thread, list_emails, list_right_now, list_commitments, list_prepared_drafts, list_watched_threads) and check_before_send, which asks RadMail's gate about a message and sends nothing",
         never: "no send and no inbox-action tool is registered on this endpoint, with or without a key; no key is stored, logged or echoed",
       },
     }),
