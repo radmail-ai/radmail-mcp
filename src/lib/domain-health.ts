@@ -244,6 +244,9 @@ export type DmarcPolicy = "none" | "quarantine" | "reject";
 export interface DmarcAnalysis {
   verdict: RecordVerdict;
   record: string | null;
+  /** How many v=DMARC1 records the domain publishes. >1 means the domain has NO
+   *  DMARC at all (RFC 7489 §6.6.3) — mirrors SpfAnalysis.recordCount. */
+  recordCount: number;
   policy: DmarcPolicy | null;
   subdomainPolicy: DmarcPolicy | null;
   /** Percent of failing mail the policy applies to (pct=, default 100). */
@@ -251,7 +254,39 @@ export interface DmarcAnalysis {
   hasRua: boolean;
 }
 
-/** Pure: the v=DMARC1 record among _dmarc TXT records (reference's parseDmarcRecord). */
+/**
+ * Pure: EVERY v=DMARC1 record at _dmarc.<domain> — mirror of findSpfRecords.
+ *
+ * 🩸 WHY THIS EXISTS (measured 2026-10-21 on a live domain we own). The SPF side of
+ * this file has counted its records since day one and correctly fails on >1 (RFC 7208
+ * §3.2 permerror). The DMARC side only ever asked for the FIRST record, so a domain
+ * publishing two was graded off whichever happened to come back first.
+ *
+ * A domain in our own fleet publishes two, in this shape (de-identified — this repo is
+ * PUBLIC, and naming a live unprotected domain here would be an invitation; the real
+ * records also tripped the tracked-file denylist gate, which is doing its job):
+ *     "v=DMARC1; p=quarantine; adkim=r; aspf=r; rua=mailto:dmarc@registrar.example;"
+ *     "v=DMARC1; p=none; rua=mailto:dmarc@owner.example; pct=100; adkim=r; aspf=r"
+ * The first is a registrar-added default, the second hand-written — the usual cause.
+ * **RFC 7489 section 6.6.3: more than one record means the domain is treated as having
+ * NONE.** So that `p=quarantine` is void and the domain has no spoofing protection —
+ * and this tool reported `verdict: "warn"` with advice to *ratchet to p=quarantine*, a
+ * policy already published and already doing nothing. Reading a policy off one of
+ * several records is not a weaker signal; it points the opposite way.
+ *
+ * The bug was inherited, not invented here: the header of this file records that the
+ * SPF/DMARC logic was ported from /CODE/watchdog/checks/domain-spf-dmarc.mjs, whose
+ * parseDmarcRecord also returned only the first record. The port added a count to SPF
+ * and not to DMARC. The watchdog reference was fixed the same day.
+ */
+export function findDmarcRecords(txtRecords: string[]): string[] {
+  return txtRecords
+    .map((r) => r.trim())
+    .filter((r) => /^v=dmarc1(\s|;|$)/i.test(r));
+}
+
+/** Pure: the v=DMARC1 record among _dmarc TXT records (reference's parseDmarcRecord).
+ *  Returns the FIRST — callers that need a verdict must use analyzeDmarc, which counts. */
 export function findDmarcRecord(txtRecords: string[]): string | null {
   for (const r of txtRecords) {
     if (r.trim().toLowerCase().startsWith("v=dmarc1")) return r.trim();
@@ -269,10 +304,26 @@ export function dmarcPolicy(record: string, tag: "p" | "sp" = "p"): DmarcPolicy 
 
 /** Pure: full DMARC analysis from the _dmarc TXT record strings. */
 export function analyzeDmarc(txtRecords: string[]): DmarcAnalysis {
-  const record = findDmarcRecord(txtRecords);
-  if (!record) {
-    return { verdict: "none", record: null, policy: null, subdomainPolicy: null, pct: null, hasRua: false };
+  const all = findDmarcRecords(txtRecords);
+  if (all.length === 0) {
+    return { verdict: "none", record: null, recordCount: 0, policy: null, subdomainPolicy: null, pct: null, hasRua: false };
   }
+  if (all.length > 1) {
+    /* RFC 7489 6.6.3: multiple DMARC1 records = the domain has NO DMARC. `policy` is
+       deliberately null even though every record here names one — publishing a tier that
+       receivers never apply is exactly the thing that read as healthy. Same shape as the
+       SPF permerror branch above, which also nulls allQualifier. */
+    return {
+      verdict: "fail",
+      record: all.join(" | "),
+      recordCount: all.length,
+      policy: null,
+      subdomainPolicy: null,
+      pct: null,
+      hasRua: all.some((r) => /[;\s]rua\s*=\s*mailto:/i.test(` ${r}`)),
+    };
+  }
+  const record = all[0];
   const policy = dmarcPolicy(record, "p");
   const subdomainPolicy = dmarcPolicy(record, "sp");
   const pctMatch = /[;\s]pct\s*=\s*(\d{1,3})\b/i.exec(` ${record}`);
@@ -280,10 +331,10 @@ export function analyzeDmarc(txtRecords: string[]): DmarcAnalysis {
   const hasRua = /[;\s]rua\s*=\s*mailto:/i.test(` ${record}`);
   if (!policy) {
     // A v=DMARC1 record with no p= tag is syntactically invalid — receivers ignore it.
-    return { verdict: "fail", record, policy: null, subdomainPolicy, pct, hasRua };
+    return { verdict: "fail", record, recordCount: 1, policy: null, subdomainPolicy, pct, hasRua };
   }
   const verdict: RecordVerdict = policy === "none" ? "warn" : "pass";
-  return { verdict, record, policy, subdomainPolicy, pct, hasRua };
+  return { verdict, record, recordCount: 1, policy, subdomainPolicy, pct, hasRua };
 }
 
 // ─── DKIM (pure verdict + selector-probe orchestration) ──────────────────────
@@ -547,6 +598,12 @@ export function buildAdvice(
     advice.push(
       "No DMARC record — add a TXT at _dmarc.<domain>: \"v=DMARC1; p=none; rua=mailto:<you>@<domain>\" to start monitoring, then ratchet p= to quarantine/reject.",
     );
+  } else if (dmarc.recordCount > 1) {
+    /* Must precede the generic "fail" branch below, which means something else entirely
+       (a record with no p= tag). Both are fail; only one is fixed by editing syntax. */
+    advice.push(
+      `MULTIPLE DMARC records (${dmarc.recordCount}) — RFC 7489 treats a domain with more than one as having NO DMARC, so whatever policy they name is NOT in effect and spoofed mail is neither quarantined nor rejected. The fix is a DELETION, not an edit: remove all but ONE record at _dmarc.<domain>, then set the policy on the survivor. A registrar-added default (rua= pointing at the registrar's own domain) alongside a hand-written record is the usual cause. Check which you intend before deleting — removing the permissive one can activate a stricter policy and start quarantining real mail.`,
+    );
   } else if (dmarc.verdict === "fail") {
     advice.push(
       "DMARC record is present but has no valid p= policy tag — receivers ignore it. Fix the record syntax (e.g. \"v=DMARC1; p=none; rua=mailto:...\").",
@@ -654,7 +711,7 @@ export async function checkDomainHealth(domain: string): Promise<DomainHealthRes
   }
 
   const dmarc: DmarcAnalysis = dmarcFailed
-    ? { verdict: "unknown", record: null, policy: null, subdomainPolicy: null, pct: null, hasRua: false }
+    ? { verdict: "unknown", record: null, recordCount: 0, policy: null, subdomainPolicy: null, pct: null, hasRua: false }
     : analyzeDmarc(dmarcTxt.ok ? dmarcTxt.records : []);
 
   const selectorsFound = selectorResults.filter((s) => s.status !== "none");
