@@ -96,6 +96,23 @@
 
 ## 0.5.1 (unreleased)
 
+- **Docs:** discloses that **two directory records exist for this codebase and a third-party page is
+  grading the stale one.** Measured 2026-10-24: `glama.ai/mcp/servers/radmail-ai/radmail-mcp` reads
+  Maintenance Activity **Active** / Responsiveness **No issues**, and its own "Updated 2026-10-24
+  03:12 UTC" matches this repo's GitHub `pushed_at` to the minute; `glama.ai/mcp/servers/dougsureel-tech/radmail-mcp`,
+  a stale mirror of an earlier publish, reads **Inactive** / **Unresponsive**. The downstream effect
+  neither page shows: Glama's *Related MCP Servers* card for this server, rendered on other servers'
+  pages, is built from the **stale** record — on `glama.ai/mcp/connectors/ai.mails/agent-email` it
+  credits `dougsureel-tech` and prints **`F maintenance`** beside this server's own description. The
+  root cause is named and then CORRECTED by re-measurement (2026-11-01): it is **three of the four**
+  official-registry records for `ai.radmail/radmail-mcp` that carry
+  `repository.url = github.com/dougsureel-tech/radmail-mcp` — the superseded `0.1.0`, `0.3.1`, `0.3.2`.
+  The current (`isLatest`) `0.5.0` record carries `github.com/radmail-ai/radmail-mcp` and has since
+  2026-08-17. An earlier revision of this entry said all four; the overstatement is corrected in place
+  rather than removed. Republishing is credential-gated. Ships the keyless commands that decide which
+  card is live and which handle each record names.
+  Mirrored in `llms.txt`.
+
 - **Docs:** answers the **BEC control checklist the email-security category publishes**, in that
   category's own vocabulary, and gives three of its five controls a flat *no*. Second authorized
   reviewer on wires / payroll / vendor-bank changes: **applies and is stricter** (no approval request

@@ -240,7 +240,18 @@ Everything above this line is RadMail checking RadMail. A reader is right to dis
 
 [![AxioRank MCP Security Index grade for radmail-mcp](https://axiorank.com/api/badge/mcp/ai-radmail-radmail-mcp.svg)](https://axiorank.com/mcp-index/ai-radmail-radmail-mcp)
 
-AxioRank's MCP Security Index crawls a server's declared tool surface and grades its **blast radius** — "the most powerful thing each of its tools can do." Its scorecard for this server, read **2026-10-22**:
+> ⚠️ **Re-read 2026-10-31, and the news is against us: AxioRank is publishing no grade for this server right now, and the live badge above says so.** It renders **"AxioRank: unrated"**. The scorecard page returns `"grade":null` in its own payload, and the four panels that held the numbers below — Grade, Blast radius, Tools, Capabilities — now read `unrated`, `–`, `–`, `–`. The page also no longer shows the `high` advisory discussed further down (`Credential / secret access` → **0** occurrences, where it was present on 2026-10-22), and it shrank from 148,905 B to 123,139 B. **Re-verified 2026-11-01 and unchanged:** badge still `AxioRank: unrated`, page 200 / 123,077 B, `unrated` present, `"grade":null`.
+>
+> **The table below is therefore the 2026-10-22 reading, kept and dated, not a current one.** Two things are worth saying plainly about it. First, **this does not look like a downgrade of RadMail**: two unrelated slugs on the same badge endpoint — `io-github-modelcontextprotocol-servers` and `ai-mails-agent-email` — also return `unrated` today, so the grades appear withdrawn across the index rather than for this server. We do not know why, we did not ask, and we are not going to guess in public. Second, **a withdrawn grade is not a grade of zero and is not evidence in RadMail's favour either** — the correct reading of this paragraph today is *there is currently no independent grade here*, and the only thing you should rely on is the `tools/list` call above, which you can run yourself with no account.
+>
+> This section said, before any of this happened, that the badge is served live by them and *"moves if their grade moves — including downward. That is the point of citing it."* This is what that looks like when it is honoured rather than quietly edited out. Re-derive both states yourself:
+>
+> ```bash
+> curl -s https://axiorank.com/api/badge/mcp/ai-radmail-radmail-mcp.svg | grep -o 'AxioRank: [a-z]*'
+> curl -s https://axiorank.com/mcp-index/ai-radmail-radmail-mcp | grep -o '\\"grade\\":[a-z]*'
+> ```
+
+AxioRank's MCP Security Index crawls a server's declared tool surface and grades its **blast radius** — "the most powerful thing each of its tools can do." Its scorecard for this server, as read on **2026-10-22** (superseded — see the note above):
 
 | what AxioRank measured | its value |
 |---|---|
@@ -258,7 +269,7 @@ RadMail has no relationship with AxioRank, did not request the listing, and cann
 
 #### The `high` advisory on that page, and the one keyword that causes it
 
-That same scorecard shows an **Advisory: `high` — "Credential / secret access capability."** It would be dishonest to link the grade and skip the red word next to it, so: AxioRank labels that block *"Keyword matches in tool descriptions and schemas… shown for transparency and are not part of the grade"* — and the keyword it matched is one this README can name, because it was measured rather than guessed.
+On **2026-10-22** that same scorecard showed an **Advisory: `high` — "Credential / secret access capability."** It would have been dishonest to link the grade and skip the red word next to it, so it was named here — and it is kept here now that the advisory has gone along with the grade, because a record that only keeps the flattering half is not a record: AxioRank labels that block *"Keyword matches in tool descriptions and schemas… shown for transparency and are not part of the grade"* — and the keyword it matched is one this README can name, because it was measured rather than guessed.
 
 ```bash
 curl -s -X POST https://radmail.ai/api/mcp/sandbox \
@@ -510,6 +521,42 @@ curl -s 'https://registry.modelcontextprotocol.io/v0/servers?search=radmail' \
 ⚠️ **The two do not match yet, and that is stated here rather than glossed.** Observed **2026-10-10**: the registry's current (`isLatest`) record for `ai.radmail/radmail-mcp` is **0.5.0** on the `2025-09-29` schema — which has no `title` field at all — and carries the older 93-character description, while `main` is 0.5.1. So read this section as *what RadMail declares*, not as what a directory is showing you today; the second command above is the one that settles it either way.
 
 Updating the record is a credential action and a human's — `mcp-publisher login github` (or `login dns --domain radmail.ai`) then `mcp-publisher publish`. **`mcp-publisher validate` needs no credential**, so anyone can check the record is well-formed before trusting it; against this repo on 2026-10-10 it returns `✅ server.json is valid`.
+
+### Two directory records exist for this codebase, one of them is stale, and a third-party page is grading the stale one
+
+A directory that mirrors `server.json` inherits whatever author handle that record points at — including an old one. This server has two live Glama pages, and they do not say the same thing about it. Measured 2026-10-24:
+
+| Page | Maintenance Activity | Responsiveness |
+|---|---|---|
+| `glama.ai/mcp/servers/radmail-ai/radmail-mcp` — the live record | **Active** | **No issues** |
+| `glama.ai/mcp/servers/dougsureel-tech/radmail-mcp` — a stale mirror of an earlier publish | **Inactive** | **Unresponsive** |
+
+The live page's own timestamp ("Updated 2026-10-24 03:12 UTC") matches this repo's GitHub `pushed_at` to the minute, so the Active grade is a real reading of real activity. The Inactive grade is also a real reading — of a mirror nobody pushes to.
+
+**The part worth publishing is the downstream effect, because it is not visible from either page.** Glama renders a *Related MCP Servers* card for this server on other servers' pages. On one of them (`glama.ai/mcp/connectors/ai.mails/agent-email`, read 2026-10-24) that card is built from the **stale** record: it credits `dougsureel-tech` and prints **`F maintenance`** next to this server's one-line description. So a reader — or a model summarising that page — can meet this server for the first time as an F, attached to the wrong author, inside a page about something else. *This is not a complaint about that server or its publisher; the card is Glama's widget, not their copy.*
+
+**And the root cause is partly ours — but stated precisely, because the first draft of this paragraph overstated it and was caught by re-measuring.** ↩️ **Correction, measured 2026-11-01:** it is **three of the four** records for `ai.radmail/radmail-mcp` in the official MCP registry that carry `repository.url = github.com/dougsureel-tech/radmail-mcp` — the three superseded ones (`0.1.0`, `0.3.1`, `0.3.2`). The **current (`isLatest`) record, `0.5.0`, carries `github.com/radmail-ai/radmail-mcp`** and has since it was published 2026-08-17. So the canonical record a directory should be reading today names the right handle; what persists is (a) three superseded records that stay publicly queryable and keep the old handle discoverable, and (b) directory pages already minted from them, which nothing in the registry retracts. An earlier revision of this section said *all four*. That was wrong, it is corrected here rather than quietly edited, and you can settle it in one keyless command:
+
+```bash
+curl -s 'https://registry.modelcontextprotocol.io/v0/servers?search=radmail' \
+  | python3 -c 'import json,sys; [print(s["server"]["version"], s["server"]["repository"]["url"], s["_meta"]["io.modelcontextprotocol.registry/official"]["isLatest"]) for s in json.load(sys.stdin)["servers"]]'
+```
+
+Republishing the record (which would also let the superseded ones fall further out of reach) is credential-gated (see the paragraph above) and has not been done.
+
+Which card is live is decidable in one command, with no key:
+
+```bash
+# the live repo's last push, from GitHub itself
+curl -s https://api.github.com/repos/radmail-ai/radmail-mcp \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["full_name"], "pushed", d["pushed_at"])'
+
+# the handle every registry record still points at
+curl -s 'https://registry.modelcontextprotocol.io/v0/servers?search=radmail' \
+  | python3 -c 'import json,sys; [print(s["server"]["version"], s["server"]["repository"]["url"]) for s in json.load(sys.stdin)["servers"]]'
+```
+
+If the first command names `radmail-ai/radmail-mcp` and the second still names `dougsureel-tech`, you are looking at exactly the skew described here, and the `radmail-ai` page is the one to read.
 
 ## Links
 
