@@ -2,6 +2,21 @@
 
 ## 0.6.0 (unreleased — not published to npm)
 
+- **Docs: the ranking rule itself is published, in numbers.** The README named
+  `importance × urgency` in the repo description and the tools table but never wrote the rule
+  down — `two-axis`, `Eisenhower`, `quadrant`, `threshold`, `urgency signals` and
+  `importance x urgency` were all **zero occurrences** across README + `llms.txt`, on a server
+  whose first-listed capability is two-axis triage. Now published from the code: every importance
+  point value and sink, the urgency ladder and its two regulatory floors, the two exported
+  thresholds (importance ≥45, urgency ≥50) and the four quadrants (`do` / `schedule` /
+  `delegate` / `drop`), the importance-led blend `round(importance*0.8 + urgency*0.2)`, and the
+  ±42-point hard cap on the behavioral layer with its six named signals. Four limits stated
+  rather than discovered: no model runs in the ranking path; `recall` and `wslcb_notice` are
+  industry-specific ports and are **not** relabelled to look generic; urgency is deadline
+  pressure and not tone, so `URGENT!!!` moves it zero by itself; and the sandbox runs identity
+  weights. Closes with the separation that matters — **a high score never unlocks an action**.
+  Mirrored condensed in `llms.txt`.
+
 - **`check_before_send` (connected mode, default surface):** asks RadMail's `POST /api/v1/gate`
   whether an email the agent will send **through its own provider** should go, WITHOUT sending
   it — verdict `pass` / `review` / `human_only` with reasons. Nothing is sent or stored. The

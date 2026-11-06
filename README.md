@@ -234,6 +234,74 @@ Why "Re: PO-4471 — confirm revised delivery window" [m_001] scored importance 
 
 **The two tiers take the argument differently, and that is by design, not drift.** The hosted sandbox serves a fixed demo inbox, so `why_surfaced` there takes `message_id` — ids `m_001`–`m_006`, and `list_right_now` prints them in brackets. The local stdio package has no inbox of its own (you pass it your own messages), so there `why_surfaced` takes the **message object** — `from` and `body`, optionally `knownSender` / `hasReply` / `receivedAt` / `subject` — the same shape as `triage`. Measured on the hosted tier 2026-10-19: the camelCase guess `{"messageId":"m_001"}` does not fail silently, it answers `No demo message with id "". Pass a message_id from triage_inbox (available ids: m_001, m_002, m_003, m_004, m_005, m_006).` — which is the list you needed. Published here so the convention is read rather than discovered.
 
+### The ranking rule itself — the two axes, the thresholds, and the four quadrants
+
+Everything above shows how to *reproduce* an explanation. None of it published the rule being explained. This category's writing says an AI agent "classifies each message by urgency" and stops there; *"two-axis triage (importance × urgency)"* is in this repo's one-line description and appeared **nowhere in this README** until now. So here is the rule in the numbers the code actually uses — `src/engine/importance-score.ts` and `src/engine/signals.ts` — so a reader can disagree with it specifically instead of taking it on faith.
+
+**The two axes are two separate functions, not one score split in half.**
+
+**Axis 1 — importance ("does this matter?").** Points, summed, then clamped 0–100:
+
+| signal | points |
+|---|---|
+| product recall | +100 |
+| regulatory notice | +90 |
+| a deadline today or already past | +70 |
+| deadline in ≤2 days | +60 |
+| the classifier was unsure and wants a human | +55 |
+| deadline in ≤7 days | +45 |
+| invoice with no parsed deadline | +30 |
+| credit / return / refund / chargeback / shortage / damage language in the subject | +25 |
+| dollar amount present | +6, +9 (≥$250), +14 (≥$1,000), +22 (≥$5,000) |
+| deadline more than 7 days out | +18 |
+| known counterparty | +8 |
+| arrived in the last 24h / 72h | +6 / +3 |
+
+Sinks, applied before anything else can lift a message: spam → importance **2**. Archived → **5**. Low-value classes (`marketing`, `sample`, `availability`, `meeting`, `system`) → capped at **15** no matter what else scored. Already processed → score **×0.5** (softened, not zeroed, so a filed-but-still-due invoice keeps rank).
+
+Bands are read off importance alone: **critical ≥80 · high ≥45 · normal ≥20 · low <20**.
+
+**Axis 2 — urgency ("how much time is left?").** A separate function over the extracted due date only:
+
+| condition | urgency |
+|---|---|
+| due today or overdue | 100 |
+| due in ≤2 days | 85 |
+| due in ≤7 days | 60 |
+| due in >7 days | 30 |
+| no deadline, not regulatory | 0 |
+| product recall | floor of 90 (regulatory windows are time-bound even with no parsed date) |
+| regulatory notice | floor of 70 |
+| spam / archived | 0 |
+
+**The four quadrants** come from thresholding the two axes — importance **≥45**, urgency **≥50** (`IMPORTANCE_AXIS_THRESHOLD`, `URGENCY_AXIS_THRESHOLD`, both exported):
+
+| | urgency ≥50 | urgency <50 |
+|---|---|---|
+| **importance ≥45** | `do` | `schedule` |
+| **importance <45** | `delegate` | `drop` |
+
+For a single-column sort the two axes blend **importance-led**: `combined = round(importance × 0.8 + urgency × 0.2)` — so a tie on importance breaks toward the time-pressured one. The list comparator is importance descending, then newest first.
+
+**The behavioral layer is bounded on purpose.** Six named signals — `sender_reply_rate`, `sender_pullback`, `sender_archive_unread`, `reply_to_outbound`, `user_in_thread`, `learned_sender_score` — adjust the **importance** axis only, and the total is hard-capped at **±42 points** (`BEHAVIOR_MAX_POINTS`). That cap is deliberate in both directions: it is big enough that a reliably-answered recent correspondent clears `high` off a near-zero content base (the buried-recall case), and small enough that **behavior can never manufacture a `critical` (≥80) on its own**. An explicit "not important" from the owner caps importance at 15 — human ground truth wins — but still cannot bury a regulatory-floored score, and nothing in the behavioral layer can rescue spam or an archived message, which stay sunk on both axes.
+
+**Four limits, stated rather than left to be discovered:**
+
+1. **No model runs in the ranking.** `scoreEmailTwoAxis` is a pure function; the caller passes `now`. Same input, same bytes — that is what makes the three-identical-calls check above possible, and it is why the explanation is a template over the breakdown rather than a second generation.
+2. **Two of the regulatory classes are industry-specific, and this README is not going to relabel them to look generic.** `recall` and `wslcb_notice` ship in the code as-is — carried over from the regulated-distribution inbox this scorer was first built against, where a product recall and a state-regulator notice are the two things that must never be missed. A deployment in another industry gets the deadline, amount, credit/return, counterparty, recency and behavioral signals; those two floors simply never fire.
+3. **Urgency is deadline pressure, not tone.** It is extracted from a due date. `URGENT!!!` in a subject line moves the urgency axis **zero** on its own — which is the point, since that string is also what a BEC lure uses.
+4. **The sandbox runs identity weights** — every per-family multiplier at 1.0, i.e. the original hand-tuned point values exactly. The owner-taught tuner (see *The live engine is owner-taught*) scales signal families within hard bounds, and the regulatory floors can never be tuned below their floor.
+
+**None of this is the hard-stop, and the two must not be confused.** Ranking decides what you see first. The hard-stop decides what no tool may ever do — money, changed banking, first contact, decisions and prompt injection stay human-only forever, enforced by the absence of the capability. **A high score never unlocks an action.** An email can score `importance 100 × urgency 100`, land in `do`, lead the Right Now lane, and still get no draft at all.
+
+Check the axes against this table with no account — the demo inbox prints both numbers (observed **2026-11-05**: `importance 94 x urgency 94` on `m_001`, `importance 100 x urgency 50` on `m_003` — importance-high, urgency-mid, i.e. the `schedule`/`do` boundary doing exactly what the thresholds above say it should):
+
+```bash
+curl -s -X POST https://radmail.ai/api/mcp/sandbox \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_right_now","arguments":{}}}'
+```
+
 ### An independent grade of this server — one we did not ask for and do not control
 
 Everything above this line is RadMail checking RadMail. A reader is right to discount it. So here is the same claim measured by someone else, on a page RadMail does not own, cannot edit, and never submitted to:
