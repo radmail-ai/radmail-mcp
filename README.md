@@ -274,7 +274,7 @@ Bands are read off importance alone: **critical ≥80 · high ≥45 · normal �
 | regulatory notice | floor of 70 |
 | spam / archived | 0 |
 
-**The four quadrants** come from thresholding the two axes — importance **≥45**, urgency **≥50** (`IMPORTANCE_AXIS_THRESHOLD`, `URGENCY_AXIS_THRESHOLD`, both exported):
+**The four quadrants** are the Eisenhower importance-vs-urgency matrix — the exported type is literally `EisenhowerQuadrant` — computed from the signals rather than asked of the user. They come from thresholding the two axes — importance **≥45**, urgency **≥50** (`IMPORTANCE_AXIS_THRESHOLD`, `URGENCY_AXIS_THRESHOLD`, both exported):
 
 | | urgency ≥50 | urgency <50 |
 |---|---|---|
