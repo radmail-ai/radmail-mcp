@@ -2,6 +2,21 @@
 
 ## 0.6.0 (unreleased — not published to npm)
 
+- **Docs: the independent grade came back, and the record keeps the order the facts arrived in.**
+  On 2026-10-31 AxioRank published no grade for this server and the README said so in a dated note
+  (badge *"AxioRank: unrated"*, `"grade":null`, page 123,139 B). Re-measured **2026-11-06**: the
+  grade **A** is live again — badge `200 / 861 B` rendering *"AxioRank: risk A"*, `"grade":"A"` in
+  the page payload, page back to **148,905 B**, panels reading **A / 0-100 blast radius / 6 tools /
+  "minimal exposure"**, `unrated` **0**, and the `high` *Credential / secret access* advisory
+  present again. The withdrawal note is **kept, not rewritten** — the honest reading is published
+  alongside it: a grade that can vanish for a week and return is weaker evidence than one that
+  holds, whichever way it points, so the claim to rely on is the keyless `tools/list` call
+  (**6 tools, 0 send-capable**, re-run today). Also **fixes two published verify commands** that
+  were lower-case-only character classes: `grep -o 'AxioRank: [a-z]*'` printed a truncated
+  `"AxioRank: risk "` and `grep -o '\"grade\":[a-z]*'` matched nothing once the grade returned as
+  `A` — caught by running our own published command. `llms.txt` now carries the whole episode
+  (withdrawn 10-31 → 11-01, restored 11-06), where before it carried only the 10-22 reading.
+
 - **Docs: the ranking rule itself is published, in numbers.** The README named
   `importance × urgency` in the repo description and the tools table but never wrote the rule
   down — `two-axis`, `Eisenhower`, `quadrant`, `threshold`, `urgency signals` and

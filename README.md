@@ -308,6 +308,10 @@ Everything above this line is RadMail checking RadMail. A reader is right to dis
 
 [![AxioRank MCP Security Index grade for radmail-mcp](https://axiorank.com/api/badge/mcp/ai-radmail-radmail-mcp.svg)](https://axiorank.com/mcp-index/ai-radmail-radmail-mcp)
 
+> ✅ **Re-read 2026-11-06: the grade is BACK, and this note is kept in the order the facts arrived rather than rewritten to look tidy.** Measured today: the badge above renders **"AxioRank: risk A"** (`200 / 861 B`), the scorecard page returns `\"grade\":\"A\"` in its own payload at **148,905 B** — byte-for-byte the pre-withdrawal size — the four panels read **A / 0-100 blast radius / 6 tools / "minimal exposure"**, `unrated` appears **0** times, and the `high` *Credential / secret access* advisory discussed below is present again (2 occurrences). So the **2026-10-22 table below is a current reading again, not a historical one.**
+>
+> **We still do not know why it moved in either direction, and we are not going to guess in public.** What we will say is the part that is uncomfortable for us: a grade that can vanish for a week and return is a weaker piece of evidence than one that holds, whichever way it is pointing at the time — so the thing to rely on is still the `tools/list` call above, which you can run yourself with no account and which returned **6 tools, 0 send-capable** again today. The paragraphs below are the record of the week it was gone, left in place on purpose.
+>
 > ⚠️ **Re-read 2026-10-31, and the news is against us: AxioRank is publishing no grade for this server right now, and the live badge above says so.** It renders **"AxioRank: unrated"**. The scorecard page returns `"grade":null` in its own payload, and the four panels that held the numbers below — Grade, Blast radius, Tools, Capabilities — now read `unrated`, `–`, `–`, `–`. The page also no longer shows the `high` advisory discussed further down (`Credential / secret access` → **0** occurrences, where it was present on 2026-10-22), and it shrank from 148,905 B to 123,139 B. **Re-verified 2026-11-01 and unchanged:** badge still `AxioRank: unrated`, page 200 / 123,077 B, `unrated` present, `"grade":null`.
 >
 > **The table below is therefore the 2026-10-22 reading, kept and dated, not a current one.** Two things are worth saying plainly about it. First, **this does not look like a downgrade of RadMail**: two unrelated slugs on the same badge endpoint — `io-github-modelcontextprotocol-servers` and `ai-mails-agent-email` — also return `unrated` today, so the grades appear withdrawn across the index rather than for this server. We do not know why, we did not ask, and we are not going to guess in public. Second, **a withdrawn grade is not a grade of zero and is not evidence in RadMail's favour either** — the correct reading of this paragraph today is *there is currently no independent grade here*, and the only thing you should rely on is the `tools/list` call above, which you can run yourself with no account.
@@ -315,11 +319,13 @@ Everything above this line is RadMail checking RadMail. A reader is right to dis
 > This section said, before any of this happened, that the badge is served live by them and *"moves if their grade moves — including downward. That is the point of citing it."* This is what that looks like when it is honoured rather than quietly edited out. Re-derive both states yourself:
 >
 > ```bash
-> curl -s https://axiorank.com/api/badge/mcp/ai-radmail-radmail-mcp.svg | grep -o 'AxioRank: [a-z]*'
-> curl -s https://axiorank.com/mcp-index/ai-radmail-radmail-mcp | grep -o '\\"grade\\":[a-z]*'
+> # NOTE (fixed 2026-11-06): the character classes below were lower-case-only, so they
+> # printed a truncated "AxioRank: risk " and matched nothing once the grade came back as "A".
+> curl -s https://axiorank.com/api/badge/mcp/ai-radmail-radmail-mcp.svg | grep -o 'AxioRank: [A-Za-z ]*'
+> curl -s https://axiorank.com/mcp-index/ai-radmail-radmail-mcp | grep -o '\\"grade\\":[^,]*'
 > ```
 
-AxioRank's MCP Security Index crawls a server's declared tool surface and grades its **blast radius** — "the most powerful thing each of its tools can do." Its scorecard for this server, as read on **2026-10-22** (superseded — see the note above):
+AxioRank's MCP Security Index crawls a server's declared tool surface and grades its **blast radius** — "the most powerful thing each of its tools can do." Its scorecard for this server, as read on **2026-10-22** and **re-confirmed live on 2026-11-06** after a week in which it published no grade at all (see the dated notes above):
 
 | what AxioRank measured | its value |
 |---|---|
