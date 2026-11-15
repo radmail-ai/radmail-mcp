@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 (unreleased — not published to npm)
+## 0.6.0
 
 - **Docs: the independent grade came back, and the record keeps the order the facts arrived in.**
   On 2026-10-31 AxioRank published no grade for this server and the README said so in a dated note
@@ -124,7 +124,7 @@
   package (0.5.0, 2026-08-11) does not contain `send_email`, that it ships in 0.6.0, and how to
   run from source until then. Tool-count table re-read from the frozen manifests.
 
-## 0.5.1 (unreleased)
+## 0.5.1 (never published on its own — these changes ship in 0.6.0)
 
 - **Docs:** discloses that **two directory records exist for this codebase and a third-party page is
   grading the stale one.** Measured 2026-10-24: `glama.ai/mcp/servers/radmail-ai/radmail-mcp` reads
