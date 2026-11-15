@@ -70,11 +70,11 @@ RadMail publishes both, as dated observations you can reproduce against any MCP 
 | Tier | Tools | Send-capable |
 |---|---|---|
 | Hosted zero-auth sandbox (`https://radmail.ai/api/mcp/sandbox`) | **6** | **0** |
-| This package at 0.6.0, default (also this package's hosted `/api/mcp`, with or without a bearer) | **19** | **0** |
+| This package at 0.6.0, default (also this package's `/api/mcp` handler when deployed from this version, with or without a bearer) | **19** | **0** |
 | … with `RADMAIL_SEND_TOOL=1` (local stdio only) | **20** | **1** — `send_email`, which hands mail to RadMail's outbound gate and cannot release a hold |
 | … with the opt-in inbox actions (local stdio only) | **24** | **0** — the five added tools change inbox state (archive, snooze, read state, labels); none sends, trashes or deletes |
 
-Row 1 observed **2026-10-09**; rows 2-4 read from this repository's frozen manifests at 0.6.0 (2026-10-26), which is **not yet on npm** — the published 0.5.0 predates `send_email`, the inbox actions, `check_before_send` and the 0.6.0 read tools. Reproduce row 1 with the `tools/list` command under *Verify before you connect*. Reproduce row 2 from the frozen manifest — the surface the server refuses to deviate from (`src/send-tool-manifest.ts` and `src/triage-tool-manifest.ts` hold the opt-in rows):
+Row 1 observed **2026-10-09**; rows 2-4 read from this repository's frozen manifests at 0.6.0 (2026-10-26). A cached or pinned 0.5.0 build predates `send_email`, the inbox actions, `check_before_send` and the 0.6.0 read tools, so check `npm view radmail-mcp version` and the `serverInfo.version` your server reports. Reproduce row 1 with the `tools/list` command under *Verify before you connect*. Reproduce row 2 from the frozen manifest — the surface the server refuses to deviate from (`src/send-tool-manifest.ts` and `src/triage-tool-manifest.ts` hold the opt-in rows):
 
 ```bash
 node -e 'const s=require("fs").readFileSync("src/tool-manifest.ts","utf8");
@@ -386,11 +386,11 @@ The honest shape of it: **the advisory is a true statement about our text and a 
 
 > `radmail-mcp` is live on npm — the `npx` line above works as-is. Prefer no install at all? Use the **zero-auth hosted sandbox above**.
 
-> ⚠️ **Honest note on the published version (true as of 2026-09-30).** `npm view radmail-mcp dist-tags` reports `latest: 0.5.0`, but the build inside that tarball announces itself as **`0.4.0`** over MCP — `dist/` was packed before a version bump. This repository's `main` is at `0.5.1` with the root cause fixed (`prepublishOnly` now rebuilds `dist/` before packing); the corrected package is not yet published, because publishing needs an interactive `npm login` only the maintainer can run. Reproduce it yourself: `npm pack radmail-mcp && tar -xzOf radmail-mcp-*.tgz package/dist/src/server-info.js | grep version`. No part of the safety contract depends on the version string — but RadMail publishes this check rather than asking you to assume.
+> ⚠️ **Honest note on the version string (fixed in 0.6.0).** The 0.5.0 tarball announces itself as **`0.4.0`** over MCP, because its `dist/` was packed before a version bump. From 0.6.0, `prepublishOnly` rebuilds `dist/` before packing, so the handshake reports the package version. Check the copy you have: `npm pack radmail-mcp && tar -xzOf radmail-mcp-*.tgz package/dist/src/server-info.js | grep version`. No part of the safety contract depends on the version string — but RadMail publishes this check rather than asking you to assume.
 
 Or from source: `git clone https://github.com/radmail-ai/radmail-mcp && npm i && npm run build && npm start` (stdio). Hosted deploy: Vercel Node serverless function (`api/mcp.ts`; `/` rewrites to the MCP handler).
 
-> **What the published package does not have yet (checked 2026-10-25: `npm view radmail-mcp dist-tags` → `latest: 0.5.0`, published 2026-08-11).** `send_email`, the five inbox actions, `get_attachment`, `check_before_send`, the 0.6.0 read tools (`read_thread`, `list_emails`, `list_prepared_drafts`, `list_watched_threads`) and the hosted bearer preview are all newer than that tarball. They ship in the next release, **0.6.0, which is not published yet**. Until it is, run from source — `git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm ci && npm run build` — and point your client at `node /absolute/path/to/radmail-mcp/dist/src/index.js` instead of `npx -y radmail-mcp`. The commands below show the `npx` form because that is what works once 0.6.0 is published; with 0.5.0 they start a server without those tools.
+> **Older builds.** `send_email`, the five inbox actions, `get_attachment`, `check_before_send`, the 0.6.0 read tools (`read_thread`, `list_emails`, `list_prepared_drafts`, `list_watched_threads`) and the hosted bearer preview first shipped in **0.6.0**. A cached or pinned 0.5.0 (published 2026-08-11) starts a server without them; `npm view radmail-mcp version` shows the current release, and `npx -y radmail-mcp@latest` fetches it.
 
 ## Connected mode — your real inbox
 
@@ -500,7 +500,7 @@ claude mcp add radmail -e RADMAIL_API_KEY=tmk_... -- npx -y radmail-mcp
 
 ## Opt-in: sending (local stdio only)
 
-> **Not in the published npm package yet.** `send_email` was added after `radmail-mcp@0.5.0` (npm `latest`, published 2026-08-11), so `npx -y radmail-mcp` with the variables below starts a server that does **not** list `send_email`. It ships in the next release (0.6.0, not yet published). Until then, run from source: `git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm ci && npm run build`, and replace `npx -y radmail-mcp` below with `node /absolute/path/to/radmail-mcp/dist/src/index.js`.
+> **New in 0.6.0.** `send_email` is not in `radmail-mcp@0.5.0` or earlier, so a cached older build started with the variables below does **not** list it. Check `npm view radmail-mcp version`, or run from source: `git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm ci && npm run build`, and use `node /absolute/path/to/radmail-mcp/dist/src/index.js` in place of `npx -y radmail-mcp`.
 
 Off by default, absent from the hosted endpoints, and present on a local server only when its operator sets **both**:
 
@@ -514,7 +514,7 @@ claude mcp add radmail \
   -e RADMAIL_API_KEY=tmk_... \
   -e RADMAIL_SEND_TOOL=1 \
   -e RADMAIL_SEND_API_KEY=tmk_... \
-  -- node /absolute/path/to/radmail-mcp/dist/src/index.js     # `npx -y radmail-mcp` once 0.6.0 is published
+  -- node /absolute/path/to/radmail-mcp/dist/src/index.js     # or `npx -y radmail-mcp` (0.6.0 or later)
 ```
 
 `send_email` hands the email to RadMail's outbound gate (`POST /api/v1/send`) and reports one of three outcomes:
@@ -535,7 +535,7 @@ The tool's description asks the agent to run its own correspondence review on th
 
 Off by default, absent from every hosted endpoint, and registered on a local server only when its operator sets **both** (either alone registers nothing):
 
-These tools are newer than the published npm package (0.5.0), so run this server from source until 0.6.0 is published:
+These tools are new in 0.6.0 (a 0.5.0 build does not have them). From source:
 
 ```bash
 git clone https://github.com/radmail-ai/radmail-mcp && cd radmail-mcp && npm ci && npm run build
@@ -550,7 +550,7 @@ claude mcp add radmail \
   -- node /absolute/path/to/radmail-mcp/dist/src/index.js
 ```
 
-Once 0.6.0 is on npm, `-- npx -y radmail-mcp` in place of the `node` line does the same; with 0.5.0 it starts a server without these tools.
+`-- npx -y radmail-mcp` (0.6.0 or later) in place of the `node` line does the same; a 0.5.0 build starts a server without these tools.
 
 | tool | what it does |
 |---|---|
@@ -592,7 +592,7 @@ curl -s 'https://registry.modelcontextprotocol.io/v0/servers?search=radmail' \
   | python3 -c 'import json,sys; [print(s["server"]["version"], "|", s["server"].get("title"), "|", s["server"]["description"]) for s in json.load(sys.stdin)["servers"]]'
 ```
 
-⚠️ **The two do not match yet, and that is stated here rather than glossed.** Observed **2026-10-10**: the registry's current (`isLatest`) record for `ai.radmail/radmail-mcp` is **0.5.0** on the `2025-09-29` schema — which has no `title` field at all — and carries the older 93-character description, while `main` is 0.5.1. So read this section as *what RadMail declares*, not as what a directory is showing you today; the second command above is the one that settles it either way.
+⚠️ **A registry record changes only when the maintainer publishes it.** Observed **2026-10-10**: the registry's current (`isLatest`) record for `ai.radmail/radmail-mcp` was **0.5.0** on the `2025-09-29` schema — which has no `title` field at all — with the older 93-character description. Publishing 0.6.0 replaces it with the record above. So read this section as *what RadMail declares*, not as what a directory is showing you today; the second command above is the one that settles it either way.
 
 Updating the record is a credential action and a human's — `mcp-publisher login github` (or `login dns --domain radmail.ai`) then `mcp-publisher publish`. **`mcp-publisher validate` needs no credential**, so anyone can check the record is well-formed before trusting it; against this repo on 2026-10-10 it returns `✅ server.json is valid`.
 
