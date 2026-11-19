@@ -10,7 +10,7 @@
   "permanentHardStops": [
     { "signal": "money", "rule": "any $ amount / invoice / payment / wire / ACH / remittance language -> human-only forever" },
     { "signal": "changed-banking", "rule": "new/updated/different bank, account, routing, or payment details -> human-only forever" },
-    { "signal": "first-contact", "rule": "a sender who has never written before -> human-only forever (trust is earned)" },
+    { "signal": "first-contact", "rule": "a recipient the workspace has never written to -> human-only forever (trust is earned)" },
     { "signal": "decision", "rule": "approval / sign-off / authorize / confirm-the-order -> human-only forever" },
     { "signal": "injection", "rule": "prompt-injection or anomaly in the source -> human-only forever, escalate" }
   ],
